@@ -4,7 +4,7 @@
 *.dll
 *.so
 *.dylib
-server
+/server
 session-service
 
 # Test binary, built with `go test -c`
@@ -42,3 +42,6 @@ Thumbs.db
 private.pem
 public.pem
 
+# Air (live reloading)
+tmp/
+build-errors.log

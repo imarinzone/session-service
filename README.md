@@ -43,7 +43,9 @@ make generate-keys      # Generate RSA key pair
 make docker-up          # Start PostgreSQL and Redis
 make migrate            # Run database migrations
 make create-client      # Create a test client interactively
-make run                # Start the service
+make dev                # Start with live reloading (recommended for development)
+# OR
+make run                # Start without live reloading
 ```
 
 See all available commands:
@@ -164,7 +166,7 @@ curl -X POST http://localhost:8080/oauth/verify \
 #### Get JWKS
 
 ```bash
-curl http://localhost:8080/.well-known/jwks.json
+curl http://localhost:8080/oauth2/v2.0/authorize
 ```
 
 ## API Endpoints
@@ -212,7 +214,7 @@ Validates a JWT token and returns claims if valid.
 }
 ```
 
-### GET /.well-known/jwks.json
+### GET /oauth2/v2.0/authorize
 
 Returns the public keys in JWKS format for JWT validation.
 
@@ -242,7 +244,7 @@ Environment variables:
 ### JWT Authorizer Setup
 
 1. Configure API Gateway JWT Authorizer:
-   - **JWKS URI**: `https://your-service/.well-known/jwks.json`
+   - **JWKS URI**: `https://your-service/oauth2/v2.0/authorize`
    - **Issuer**: Value of `JWT_ISSUER` (default: `session-service`)
    - **Audience**: Value of `JWT_AUDIENCE` (default: `api`)
 
@@ -268,6 +270,7 @@ zip function.zip bootstrap
 ```bash
 make help           # Show all available commands
 make build          # Build the application
+make dev            # Run with live reloading (recommended for development)
 make run            # Run the application locally
 make test           # Run tests
 make test-coverage  # Run tests with coverage report
@@ -288,10 +291,16 @@ make docker-up
 # Run migrations
 make migrate
 
-# Run the service
+# Run the service with live reloading (recommended for development)
+make dev
+
+# Or run without live reloading
 make run
 # Or: go run ./cmd/server
 ```
+
+> **Note**: The `make dev` command uses [Air](https://github.com/cosmtrek/air) for live reloading. It will automatically install Air if not present and restart the server whenever you make code changes.
+
 
 ### Run Tests
 

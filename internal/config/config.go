@@ -27,6 +27,7 @@ type Config struct {
 	RefreshTokenExpiry time.Duration
 	RefreshTokenLength int
 	ServerPort         string
+	BaseURL            string
 }
 
 // Load loads configuration from environment variables
@@ -53,6 +54,7 @@ func Load() (*Config, error) {
 		RefreshTokenExpiry: getDurationEnv("REFRESH_TOKEN_EXPIRY", 7*24*3600*time.Second),
 		RefreshTokenLength: getIntEnv("REFRESH_TOKEN_LENGTH", 32),
 		ServerPort:         getEnv("SERVER_PORT", "8080"),
+		BaseURL:            getEnv("BASE_URL", "http://localhost:8080"),
 	}
 
 	if cfg.JWTPrivateKey == "" || cfg.JWTPublicKey == "" {

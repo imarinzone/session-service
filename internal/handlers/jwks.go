@@ -22,7 +22,7 @@ func NewJWKSHandler(keyManager *auth.KeyManager, logger *zap.Logger) *JWKSHandle
 	}
 }
 
-// HandleJWKS handles GET /.well-known/jwks.json
+// HandleJWKS handles GET /oauth2/v2.0/authorize
 func (h *JWKSHandler) HandleJWKS(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -44,4 +44,3 @@ func (h *JWKSHandler) HandleJWKS(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Write(data)
 }
-

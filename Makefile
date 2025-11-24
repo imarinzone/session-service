@@ -1,4 +1,4 @@
-.PHONY: help build run test clean docker-build docker-up docker-down migrate generate-keys lint fmt vet deps
+.PHONY: help build run dev install-air test clean docker-build docker-up docker-down migrate generate-keys lint fmt vet deps
 
 # Variables
 BINARY_NAME=server
@@ -28,6 +28,20 @@ build: ## Build the application
 run: ## Run the application locally
 	@echo "$(GREEN)Running $(BINARY_NAME)...$(NC)"
 	go run $(MAIN_PATH)
+
+dev: ## Run with live reloading (requires air)
+	@echo "$(GREEN)Starting development server with live reloading...$(NC)"
+	@if ! command -v air > /dev/null; then \
+		echo "$(YELLOW)Air not found. Installing...$(NC)"; \
+		go install github.com/cosmtrek/air@latest; \
+	fi
+	air
+
+install-air: ## Install air for live reloading
+	@echo "$(GREEN)Installing air...$(NC)"
+	go install github.com/cosmtrek/air@latest
+	@echo "$(GREEN)Air installed!$(NC)"
+
 
 test: ## Run tests
 	@echo "$(GREEN)Running tests...$(NC)"
