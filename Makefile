@@ -33,13 +33,17 @@ dev: ## Run with live reloading (requires air)
 	@echo "$(GREEN)Starting development server with live reloading...$(NC)"
 	@if ! command -v air > /dev/null; then \
 		echo "$(YELLOW)Air not found. Installing...$(NC)"; \
-		go install github.com/cosmtrek/air@latest; \
+		go install github.com/air-verse/air@latest; \
 	fi
-	air
+	@if command -v air > /dev/null; then \
+		air; \
+	else \
+		$$(go env GOPATH)/bin/air || $(HOME)/go/bin/air; \
+	fi
 
 install-air: ## Install air for live reloading
 	@echo "$(GREEN)Installing air...$(NC)"
-	go install github.com/cosmtrek/air@latest
+	go install github.com/air-verse/air@latest
 	@echo "$(GREEN)Air installed!$(NC)"
 
 
