@@ -12,18 +12,18 @@ import (
 	"session-service/pkg/errors"
 	"time"
 
-	"golang.org/x/crypto/bcrypt"
 	"go.uber.org/zap"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // TokenHandler handles OAuth2 token requests
 type TokenHandler struct {
-	repo          *database.Repository
-	cache         *cache.Cache
-	tokenGen      *auth.TokenGenerator
+	repo           *database.Repository
+	cache          *cache.Cache
+	tokenGen       *auth.TokenGenerator
 	tokenValidator *auth.TokenValidator
-	config        *config.Config
-	logger        *zap.Logger
+	config         *config.Config
+	logger         *zap.Logger
 }
 
 // NewTokenHandler creates a new token handler
@@ -36,12 +36,12 @@ func NewTokenHandler(
 	logger *zap.Logger,
 ) *TokenHandler {
 	return &TokenHandler{
-		repo:          repo,
-		cache:         cache,
-		tokenGen:      tokenGen,
+		repo:           repo,
+		cache:          cache,
+		tokenGen:       tokenGen,
 		tokenValidator: tokenValidator,
-		config:        config,
-		logger:        logger,
+		config:         config,
+		logger:         logger,
 	}
 }
 
@@ -291,4 +291,3 @@ func (h *TokenHandler) sendJSON(w http.ResponseWriter, status int, data interfac
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(data)
 }
-

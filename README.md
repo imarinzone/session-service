@@ -23,7 +23,7 @@ Client → API Gateway → Session Service
 
 ## Prerequisites
 
-- Go 1.21 or higher
+- Go 1.24 or higher
 - PostgreSQL 12 or higher
 - Redis 6 or higher
 - Docker and Docker Compose (for local development)

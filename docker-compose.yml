@@ -5,8 +5,8 @@ services:
     image: postgres:15-alpine
     container_name: session-postgres
     environment:
-      POSTGRES_USER: sessionuser
-      POSTGRES_PASSWORD: sessionpass
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
       POSTGRES_DB: sessiondb
     ports:
       - "5432:5432"
@@ -14,10 +14,10 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./migrations:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U sessionuser"]
-      interval: 10s
+      test: ["CMD-SHELL", "pg_isready -U user -d sessiondb"]
+      interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
 
   redis:
     image: redis:7-alpine
@@ -37,11 +37,16 @@ services:
     container_name: session-service
     ports:
       - "8080:8080"
+    env_file:
+      - .env
     environment:
       DATABASE_URL: postgres://sessionuser:sessionpass@postgres:5432/sessiondb?sslmode=disable
       REDIS_URL: redis://redis:6379/0
-      JWT_PRIVATE_KEY: ${JWT_PRIVATE_KEY}
-      JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY}
+      JWT_PRIVATE_KEY_B64: ${JWT_PRIVATE_KEY_B64}
+      JWT_PUBLIC_KEY_B64: ${JWT_PUBLIC_KEY_B64}
+      # Fallback to plain keys if base64 not available
+      JWT_PRIVATE_KEY: ${JWT_PRIVATE_KEY:-}
+      JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY:-}
       JWT_ISSUER: ${JWT_ISSUER:-session-service}
       JWT_AUDIENCE: ${JWT_AUDIENCE:-api}
       JWT_EXPIRY: ${JWT_EXPIRY:-3600s}

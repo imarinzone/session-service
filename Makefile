@@ -88,12 +88,18 @@ migrate: ## Run database migrations
 	fi
 	@echo "$(GREEN)Migrations complete!$(NC)"
 
-generate-keys: ## Generate RSA key pair for JWT
+generate-keys: ## Generate RSA key pair for JWT and update .env
 	@echo "$(GREEN)Generating RSA key pair...$(NC)"
-	openssl genrsa -out private.pem 2048
-	openssl rsa -in private.pem -pubout -out public.pem
-	@echo "$(GREEN)Keys generated: private.pem, public.pem$(NC)"
-	@echo "$(YELLOW)Warning: Keep these keys secure and never commit them to version control!$(NC)"
+	@if [ -f scripts/setup-keys.sh ]; then \
+		./scripts/setup-keys.sh; \
+	else \
+		openssl genrsa -out private.pem 2048; \
+		openssl rsa -in private.pem -pubout -out public.pem; \
+		echo "$(GREEN)Keys generated: private.pem, public.pem$(NC)"; \
+		echo "$(YELLOW)Please manually update .env file with the key contents$(NC)"; \
+		echo "$(YELLOW)Copy the contents of private.pem to JWT_PRIVATE_KEY$(NC)"; \
+		echo "$(YELLOW)Copy the contents of public.pem to JWT_PUBLIC_KEY$(NC)"; \
+	fi
 
 dev-setup: generate-keys docker-up migrate ## Complete development setup
 	@echo "$(GREEN)Development environment ready!$(NC)"

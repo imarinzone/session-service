@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"session-service/internal/models"
 	"time"
 
@@ -20,14 +21,27 @@ type Repository struct {
 
 // NewRepository creates a new repository instance
 func NewRepository(ctx context.Context, databaseURL string, logger *zap.Logger) (*Repository, error) {
-	db, err := postgres.Open(ctx, databaseURL)
-	if err != nil {
-		return nil, err
+	// Retry connection with exponential backoff
+	var db *sql.DB
+	var err error
+	maxRetries := 5
+	for i := 0; i < maxRetries; i++ {
+		db, err = postgres.Open(ctx, databaseURL)
+		if err == nil {
+			// Test the connection
+			if err = db.PingContext(ctx); err == nil {
+				break
+			}
+			db.Close()
+		}
+		if i < maxRetries-1 {
+			waitTime := time.Duration(i+1) * time.Second
+			logger.Warn("Failed to connect to database, retrying...", zap.Int("attempt", i+1), zap.Duration("wait", waitTime), zap.Error(err))
+			time.Sleep(waitTime)
+		}
 	}
-
-	// Test the connection
-	if err := db.PingContext(ctx); err != nil {
-		return nil, err
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to database after %d attempts: %w", maxRetries, err)
 	}
 
 	return &Repository{
@@ -80,4 +94,3 @@ func (r *Repository) UpdateClientUpdatedAt(ctx context.Context, clientID string)
 	}
 	return nil
 }
-

@@ -1,10 +1,19 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
 
 // Config holds all configuration for the application
 type Config struct {
@@ -22,11 +31,22 @@ type Config struct {
 
 // Load loads configuration from environment variables
 func Load() (*Config, error) {
+	var jwtPrivateKey, jwtPublicKey string
+
+	// Fallback to plain keys with escaped newlines
+	jwtPrivateKey = getEnv("JWT_PRIVATE_KEY", "")
+	jwtPublicKey = getEnv("JWT_PUBLIC_KEY", "")
+
+	// If keys are empty, provide helpful error
+	if jwtPrivateKey == "" && jwtPublicKey == "" {
+		return nil, &ConfigError{Message: "JWT_PRIVATE_KEY and JWT_PUBLIC_KEY must be set. Generate keys using: make generate-keys"}
+	}
+
 	cfg := &Config{
 		DatabaseURL:        getEnv("DATABASE_URL", "postgres://user:password@localhost:5432/sessiondb?sslmode=disable"),
 		RedisURL:           getEnv("REDIS_URL", "redis://localhost:6379/0"),
-		JWTPrivateKey:      getEnv("JWT_PRIVATE_KEY", ""),
-		JWTPublicKey:       getEnv("JWT_PUBLIC_KEY", ""),
+		JWTPrivateKey:      jwtPrivateKey,
+		JWTPublicKey:       jwtPublicKey,
 		JWTIssuer:          getEnv("JWT_ISSUER", "session-service"),
 		JWTAudience:        getEnv("JWT_AUDIENCE", "api"),
 		JWTExpiry:          getDurationEnv("JWT_EXPIRY", 3600*time.Second),
@@ -36,7 +56,20 @@ func Load() (*Config, error) {
 	}
 
 	if cfg.JWTPrivateKey == "" || cfg.JWTPublicKey == "" {
-		return nil, &ConfigError{Message: "JWT_PRIVATE_KEY and JWT_PUBLIC_KEY must be set"}
+		return nil, &ConfigError{Message: "JWT_PRIVATE_KEY and JWT_PUBLIC_KEY must be set. Generate keys using: make generate-keys"}
+	}
+
+	// Validate that keys contain PEM markers
+	if !strings.Contains(cfg.JWTPrivateKey, "BEGIN") || !strings.Contains(cfg.JWTPrivateKey, "END") {
+		return nil, &ConfigError{Message: fmt.Sprintf("JWT_PRIVATE_KEY does not appear to be a valid PEM key. Got length: %d. First 50 chars: %s. Check that keys are properly set in .env file. Run: make generate-keys", len(cfg.JWTPrivateKey), cfg.JWTPrivateKey[:min(50, len(cfg.JWTPrivateKey))])}
+	}
+	if !strings.Contains(cfg.JWTPublicKey, "BEGIN") || !strings.Contains(cfg.JWTPublicKey, "END") {
+		return nil, &ConfigError{Message: fmt.Sprintf("JWT_PUBLIC_KEY does not appear to be a valid PEM key. Got length: %d. First 50 chars: %s. Check that keys are properly set in .env file. Run: make generate-keys", len(cfg.JWTPublicKey), cfg.JWTPublicKey[:min(50, len(cfg.JWTPublicKey))])}
+	}
+
+	// Check if keys are placeholder values
+	if strings.Contains(cfg.JWTPrivateKey, "...") || strings.Contains(cfg.JWTPublicKey, "...") {
+		return nil, &ConfigError{Message: "JWT keys appear to be placeholder values. Please generate real keys using: make generate-keys"}
 	}
 
 	return cfg, nil
@@ -79,4 +112,3 @@ type ConfigError struct {
 func (e *ConfigError) Error() string {
 	return e.Message
 }
-
