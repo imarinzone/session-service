@@ -129,10 +129,16 @@ htpasswd -nbBC 10 "" your-secret | cut -d: -f2
 
 ### 5. Test the Service
 
+#### OIDC Discovery
+
+```bash
+curl http://localhost:8080/.well-known/openid-configuration
+```
+
 #### Get Access Token (Client Credentials Grant)
 
 ```bash
-curl -X POST http://localhost:8080/oauth/token \
+curl -X POST http://localhost:8080/oauth2/v1.0/token \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "grant_type=client_credentials&client_id=my-client&client_secret=your-secret"
 ```
@@ -150,7 +156,7 @@ Response:
 #### Refresh Token
 
 ```bash
-curl -X POST http://localhost:8080/oauth/token \
+curl -X POST http://localhost:8080/oauth2/v1.0/token \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "grant_type=refresh_token&refresh_token=abc123..."
 ```
@@ -158,7 +164,7 @@ curl -X POST http://localhost:8080/oauth/token \
 #### Verify Token
 
 ```bash
-curl -X POST http://localhost:8080/oauth/verify \
+curl -X POST http://localhost:8080/oauth2/v1.0/verify \
   -H "Content-Type: application/json" \
   -d '{"token": "eyJ..."}'
 ```
@@ -166,12 +172,16 @@ curl -X POST http://localhost:8080/oauth/verify \
 #### Get JWKS
 
 ```bash
-curl http://localhost:8080/oauth2/v2.0/authorize
+curl http://localhost:8080/discovery/v1.0/keys
 ```
 
 ## API Endpoints
 
-### POST /oauth/token
+### GET /.well-known/openid-configuration
+
+OpenID Connect discovery endpoint. Returns service configuration including token endpoint, JWKS URI, and supported capabilities.
+
+### POST /oauth2/v1.0/token
 
 Issues access and refresh tokens.
 
@@ -188,7 +198,7 @@ grant_type=refresh_token
 refresh_token=<refresh_token>
 ```
 
-### POST /oauth/verify
+### POST /oauth2/v1.0/verify
 
 Validates a JWT token and returns claims if valid.
 
@@ -214,9 +224,13 @@ Validates a JWT token and returns claims if valid.
 }
 ```
 
-### GET /oauth2/v2.0/authorize
+### GET /discovery/v1.0/keys
 
 Returns the public keys in JWKS format for JWT validation.
+
+### GET /oauth2/v1.0/authorize
+
+Alternate JWKS endpoint (same as `/discovery/v1.0/keys`).
 
 ### GET /health
 
@@ -238,13 +252,14 @@ Environment variables:
 | `REFRESH_TOKEN_EXPIRY` | Refresh token expiration | `604800s` (7 days) |
 | `REFRESH_TOKEN_LENGTH` | Refresh token length in bytes | `32` |
 | `SERVER_PORT` | HTTP server port | `8080` |
+| `BASE_URL` | Base URL for OIDC discovery | `http://localhost:8080` |
 
 ## AWS API Gateway Integration
 
 ### JWT Authorizer Setup
 
 1. Configure API Gateway JWT Authorizer:
-   - **JWKS URI**: `https://your-service/oauth2/v2.0/authorize`
+   - **JWKS URI**: `https://your-service/discovery/v1.0/keys`
    - **Issuer**: Value of `JWT_ISSUER` (default: `session-service`)
    - **Audience**: Value of `JWT_AUDIENCE` (default: `api`)
 

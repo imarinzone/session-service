@@ -115,7 +115,6 @@ func main() {
 
 	// OAuth2 endpoints
 	router.HandleFunc("/oauth2/v1.0/token", tokenHandler.HandleToken).Methods("POST", "OPTIONS")
-	router.HandleFunc("/oauth2/v1.0/authorize", jwksHandler.HandleJWKS).Methods("GET", "OPTIONS")
 	router.HandleFunc("/discovery/v1.0/keys", jwksHandler.HandleJWKS).Methods("GET", "OPTIONS")
 
 	// Verfy Token

@@ -133,7 +133,7 @@ create-client: ## Create a test client (requires DATABASE_URL or docker-compose)
 	echo ""; \
 	HASH=$$(go run -c 'golang.org/x/crypto/bcrypt' <<< "$$CLIENT_SECRET" 2>/dev/null || echo "$$(htpasswd -nbBC 10 "" $$CLIENT_SECRET | cut -d: -f2)"); \
 	if [ -z "$(DATABASE_URL)" ]; then \
-		DB_URL="postgres://sessionuser:sessionpass@localhost:5432/sessiondb?sslmode=disable"; \
+		DB_URL="postgres://user:password@localhost:5432/sessiondb?sslmode=disable"; \
 	else \
 		DB_URL="$(DATABASE_URL)"; \
 	fi; \

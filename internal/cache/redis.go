@@ -186,4 +186,3 @@ func (c *Cache) IsRefreshTokenRevoked(ctx context.Context, tokenID string) (bool
 	}
 	return exists > 0, nil
 }
-

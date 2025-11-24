@@ -19,7 +19,6 @@ type OIDCConfiguration struct {
 	ScopesSupported                   []string `json:"scopes_supported"`
 	Issuer                            string   `json:"issuer"`
 	RequestURIParameterSupported      bool     `json:"request_uri_parameter_supported"`
-	AuthorizationEndpoint             string   `json:"authorization_endpoint"`
 	ClaimsSupported                   []string `json:"claims_supported"`
 }
 
@@ -57,7 +56,6 @@ func (h *OIDCConfigurationHandler) HandleOIDCConfiguration(w http.ResponseWriter
 		ScopesSupported:                   []string{"openid"},
 		Issuer:                            h.issuer,
 		RequestURIParameterSupported:      false,
-		// AuthorizationEndpoint:             h.baseURL + "/oauth2/v1.0/authorize",
 		ClaimsSupported: []string{
 			"sub",
 			"iss",
