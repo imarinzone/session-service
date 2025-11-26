@@ -10,14 +10,29 @@ import (
 	"go.uber.org/zap"
 )
 
-// Cache handles Redis operations
-type Cache struct {
+// Cache defines the interface for cache operations
+type Cache interface {
+	Close() error
+	GetClient(ctx context.Context, clientID string) (*models.Client, error)
+	SetClient(ctx context.Context, client *models.Client, ttl time.Duration) error
+	CheckRateLimit(ctx context.Context, clientID string, limit int, window time.Duration) (bool, error)
+	StoreRefreshToken(ctx context.Context, tokenID string, data *models.RefreshTokenData, ttl time.Duration) error
+	GetRefreshToken(ctx context.Context, tokenID string) (*models.RefreshTokenData, error)
+	DeleteRefreshToken(ctx context.Context, tokenID string) error
+	RevokeToken(ctx context.Context, jti string, ttl time.Duration) error
+	RevokeRefreshToken(ctx context.Context, tokenID string, ttl time.Duration) error
+	IsTokenRevoked(ctx context.Context, jti string) (bool, error)
+	IsRefreshTokenRevoked(ctx context.Context, tokenID string) (bool, error)
+}
+
+// RedisCache handles Redis operations
+type RedisCache struct {
 	client *redis.Client
 	logger *zap.Logger
 }
 
 // NewCache creates a new cache instance
-func NewCache(redisURL string, logger *zap.Logger) (*Cache, error) {
+func NewCache(redisURL string, logger *zap.Logger) (Cache, error) {
 	opt, err := redis.ParseURL(redisURL)
 	if err != nil {
 		return nil, err
@@ -31,19 +46,19 @@ func NewCache(redisURL string, logger *zap.Logger) (*Cache, error) {
 		return nil, err
 	}
 
-	return &Cache{
+	return &RedisCache{
 		client: client,
 		logger: logger,
 	}, nil
 }
 
 // Close closes the Redis connection
-func (c *Cache) Close() error {
+func (c *RedisCache) Close() error {
 	return c.client.Close()
 }
 
 // GetClient retrieves client metadata from cache
-func (c *Cache) GetClient(ctx context.Context, clientID string) (*models.Client, error) {
+func (c *RedisCache) GetClient(ctx context.Context, clientID string) (*models.Client, error) {
 	key := "client:" + clientID
 	data, err := c.client.Get(ctx, key).Result()
 	if err == redis.Nil {
@@ -64,7 +79,7 @@ func (c *Cache) GetClient(ctx context.Context, clientID string) (*models.Client,
 }
 
 // SetClient stores client metadata in cache
-func (c *Cache) SetClient(ctx context.Context, client *models.Client, ttl time.Duration) error {
+func (c *RedisCache) SetClient(ctx context.Context, client *models.Client, ttl time.Duration) error {
 	key := "client:" + client.ClientID
 	data, err := json.Marshal(client)
 	if err != nil {
@@ -80,7 +95,7 @@ func (c *Cache) SetClient(ctx context.Context, client *models.Client, ttl time.D
 }
 
 // CheckRateLimit checks if the client has exceeded rate limit
-func (c *Cache) CheckRateLimit(ctx context.Context, clientID string, limit int, window time.Duration) (bool, error) {
+func (c *RedisCache) CheckRateLimit(ctx context.Context, clientID string, limit int, window time.Duration) (bool, error) {
 	key := "rate_limit:" + clientID
 	count, err := c.client.Incr(ctx, key).Result()
 	if err != nil {
@@ -99,7 +114,7 @@ func (c *Cache) CheckRateLimit(ctx context.Context, clientID string, limit int, 
 }
 
 // StoreRefreshToken stores a refresh token in Redis
-func (c *Cache) StoreRefreshToken(ctx context.Context, tokenID string, data *models.RefreshTokenData, ttl time.Duration) error {
+func (c *RedisCache) StoreRefreshToken(ctx context.Context, tokenID string, data *models.RefreshTokenData, ttl time.Duration) error {
 	key := "refresh_token:" + tokenID
 	tokenData, err := json.Marshal(data)
 	if err != nil {
@@ -115,7 +130,7 @@ func (c *Cache) StoreRefreshToken(ctx context.Context, tokenID string, data *mod
 }
 
 // GetRefreshToken retrieves refresh token data from Redis
-func (c *Cache) GetRefreshToken(ctx context.Context, tokenID string) (*models.RefreshTokenData, error) {
+func (c *RedisCache) GetRefreshToken(ctx context.Context, tokenID string) (*models.RefreshTokenData, error) {
 	key := "refresh_token:" + tokenID
 	data, err := c.client.Get(ctx, key).Result()
 	if err == redis.Nil {
@@ -136,7 +151,7 @@ func (c *Cache) GetRefreshToken(ctx context.Context, tokenID string) (*models.Re
 }
 
 // DeleteRefreshToken deletes a refresh token from Redis
-func (c *Cache) DeleteRefreshToken(ctx context.Context, tokenID string) error {
+func (c *RedisCache) DeleteRefreshToken(ctx context.Context, tokenID string) error {
 	key := "refresh_token:" + tokenID
 	if err := c.client.Del(ctx, key).Err(); err != nil {
 		c.logger.Error("Failed to delete refresh token", zap.Error(err))
@@ -146,7 +161,7 @@ func (c *Cache) DeleteRefreshToken(ctx context.Context, tokenID string) error {
 }
 
 // RevokeToken adds a token to the revocation list
-func (c *Cache) RevokeToken(ctx context.Context, jti string, ttl time.Duration) error {
+func (c *RedisCache) RevokeToken(ctx context.Context, jti string, ttl time.Duration) error {
 	key := "revoked:jti:" + jti
 	if err := c.client.Set(ctx, key, "1", ttl).Err(); err != nil {
 		c.logger.Error("Failed to revoke token", zap.String("jti", jti), zap.Error(err))
@@ -156,7 +171,7 @@ func (c *Cache) RevokeToken(ctx context.Context, jti string, ttl time.Duration) 
 }
 
 // RevokeRefreshToken adds a refresh token to the revocation list
-func (c *Cache) RevokeRefreshToken(ctx context.Context, tokenID string, ttl time.Duration) error {
+func (c *RedisCache) RevokeRefreshToken(ctx context.Context, tokenID string, ttl time.Duration) error {
 	key := "revoked:refresh:" + tokenID
 	if err := c.client.Set(ctx, key, "1", ttl).Err(); err != nil {
 		c.logger.Error("Failed to revoke refresh token", zap.String("token_id", tokenID), zap.Error(err))
@@ -166,7 +181,7 @@ func (c *Cache) RevokeRefreshToken(ctx context.Context, tokenID string, ttl time
 }
 
 // IsTokenRevoked checks if a token is revoked
-func (c *Cache) IsTokenRevoked(ctx context.Context, jti string) (bool, error) {
+func (c *RedisCache) IsTokenRevoked(ctx context.Context, jti string) (bool, error) {
 	key := "revoked:jti:" + jti
 	exists, err := c.client.Exists(ctx, key).Result()
 	if err != nil {
@@ -177,7 +192,7 @@ func (c *Cache) IsTokenRevoked(ctx context.Context, jti string) (bool, error) {
 }
 
 // IsRefreshTokenRevoked checks if a refresh token is revoked
-func (c *Cache) IsRefreshTokenRevoked(ctx context.Context, tokenID string) (bool, error) {
+func (c *RedisCache) IsRefreshTokenRevoked(ctx context.Context, tokenID string) (bool, error) {
 	key := "revoked:refresh:" + tokenID
 	exists, err := c.client.Exists(ctx, key).Result()
 	if err != nil {

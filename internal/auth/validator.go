@@ -14,11 +14,11 @@ type TokenValidator struct {
 	keyManager *KeyManager
 	issuer     string
 	audience   string
-	cache      *cache.Cache
+	cache      cache.Cache
 }
 
 // NewTokenValidator creates a new token validator
-func NewTokenValidator(keyManager *KeyManager, issuer, audience string, cache *cache.Cache) *TokenValidator {
+func NewTokenValidator(keyManager *KeyManager, issuer, audience string, cache cache.Cache) *TokenValidator {
 	return &TokenValidator{
 		keyManager: keyManager,
 		issuer:     issuer,
@@ -81,4 +81,3 @@ func (tv *TokenValidator) ValidateToken(ctx context.Context, tokenString string)
 
 	return claims, nil
 }
-

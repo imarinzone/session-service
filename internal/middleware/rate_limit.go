@@ -11,7 +11,7 @@ import (
 )
 
 // RateLimitMiddleware creates a rate limiting middleware
-func RateLimitMiddleware(cache *cache.Cache, logger *zap.Logger, defaultLimit int, window time.Duration) func(http.Handler) http.Handler {
+func RateLimitMiddleware(cache cache.Cache, logger *zap.Logger, defaultLimit int, window time.Duration) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Get client_id from context (set by token handler)
@@ -50,4 +50,3 @@ func RateLimitMiddleware(cache *cache.Cache, logger *zap.Logger, defaultLimit in
 		})
 	}
 }
-

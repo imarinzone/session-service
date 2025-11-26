@@ -12,20 +12,20 @@ import (
 
 // TokenGenerator handles token generation
 type TokenGenerator struct {
-	keyManager        *KeyManager
-	issuer            string
-	audience          string
-	accessTokenExpiry time.Duration
+	keyManager         *KeyManager
+	issuer             string
+	audience           string
+	accessTokenExpiry  time.Duration
 	refreshTokenLength int
 }
 
 // NewTokenGenerator creates a new token generator
 func NewTokenGenerator(keyManager *KeyManager, issuer, audience string, accessTokenExpiry time.Duration, refreshTokenLength int) *TokenGenerator {
 	return &TokenGenerator{
-		keyManager:        keyManager,
-		issuer:            issuer,
-		audience:          audience,
-		accessTokenExpiry: accessTokenExpiry,
+		keyManager:         keyManager,
+		issuer:             issuer,
+		audience:           audience,
+		accessTokenExpiry:  accessTokenExpiry,
 		refreshTokenLength: refreshTokenLength,
 	}
 }
@@ -61,4 +61,3 @@ func (tg *TokenGenerator) GenerateRefreshToken() (string, error) {
 	}
 	return base64.URLEncoding.EncodeToString(bytes), nil
 }
-

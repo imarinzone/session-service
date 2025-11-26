@@ -269,15 +269,6 @@ Environment variables:
    - Verify issuer and audience claims
    - Return 401 for invalid/expired tokens
 
-### Lambda Deployment
-
-Package the service as a Lambda function:
-
-```bash
-GOOS=linux GOARCH=amd64 go build -o bootstrap ./cmd/server
-zip function.zip bootstrap
-```
-
 ## Development
 
 ### Common Makefile Commands
@@ -341,16 +332,52 @@ session-service/
 ├── cmd/server/          # Application entry point
 ├── internal/
 │   ├── auth/           # JWT generation and validation
-│   ├── cache/          # Redis operations
+│   ├── cache/          # Redis operations (Interface & Implementation)
 │   ├── config/         # Configuration management
-│   ├── database/       # PostgreSQL operations
+│   ├── database/       # PostgreSQL operations (Interface & Implementation)
 │   ├── handlers/       # HTTP handlers
 │   ├── middleware/     # HTTP middleware
 │   └── models/         # Data models
 ├── migrations/         # Database migrations
 ├── pkg/errors/         # Error types
-└── test/              # Unit tests
+└── test/               # Tests
+    ├── auth/           # Auth package tests
+    ├── config/         # Config package tests
+    ├── handlers/       # Handler tests (using mocks)
+    ├── helpers/        # Test helpers
+    ├── middleware/     # Middleware tests
+    └── mocks/          # Mock implementations
 ```
+
+## Testing
+
+The project uses a comprehensive testing strategy with interfaces and mocks to ensure high code quality and testability.
+
+### Running Tests
+
+```bash
+# Run all tests
+make test
+
+# Run with coverage
+make test-coverage
+```
+
+### Test Structure
+
+- **Unit Tests**: Located in the `test/` directory, mirroring the internal package structure.
+- **Mocks**: Database and Cache dependencies are mocked using `stretchr/testify/mock` in `test/mocks/`.
+- **Interfaces**: Core components (`Repository`, `Cache`) are defined as interfaces to enable mocking.
+- **Helpers**: Shared test helpers (e.g., key generation) are in `test/helpers/`.
+
+### Writing Tests
+
+To write a new test for a handler or middleware:
+1. Import `session-service/test/mocks`
+2. Create mock instances: `mockRepo := new(mocks.MockRepository)`
+3. Set expectations: `mockRepo.On("MethodName", args...).Return(results...)`
+4. Inject mocks into the component under test.
+5. Assert results and expectations: `mockRepo.AssertExpectations(t)`
 
 ## Security Considerations
 

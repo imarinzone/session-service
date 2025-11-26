@@ -18,8 +18,8 @@ import (
 
 // TokenHandler handles OAuth2 token requests
 type TokenHandler struct {
-	repo           *database.Repository
-	cache          *cache.Cache
+	repo           database.Repository
+	cache          cache.Cache
 	tokenGen       *auth.TokenGenerator
 	tokenValidator *auth.TokenValidator
 	config         *config.Config
@@ -28,8 +28,8 @@ type TokenHandler struct {
 
 // NewTokenHandler creates a new token handler
 func NewTokenHandler(
-	repo *database.Repository,
-	cache *cache.Cache,
+	repo database.Repository,
+	cache cache.Cache,
 	tokenGen *auth.TokenGenerator,
 	tokenValidator *auth.TokenValidator,
 	config *config.Config,
