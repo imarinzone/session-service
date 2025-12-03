@@ -56,6 +56,32 @@ func main() {
 		logger.Fatal("Failed to initialize key manager", zap.Error(err))
 	}
 
+	// Start key rotation scheduler (Azure/Hydra-style)
+	go func() {
+		rotationDays := cfg.KeyRotationDays
+		if rotationDays <= 0 {
+			rotationDays = 90
+		}
+		graceDays := cfg.KeyGraceDays
+		if graceDays <= 0 {
+			graceDays = 14
+		}
+
+		rotationInterval := time.Duration(rotationDays) * 24 * time.Hour
+		gracePeriod := time.Duration(graceDays) * 24 * time.Hour
+
+		ticker := time.NewTicker(rotationInterval)
+		defer ticker.Stop()
+
+		for range ticker.C {
+			logger.Info("Rotating signing keys", zap.Int("rotation_days", rotationDays), zap.Int("grace_days", graceDays))
+			if err := keyManager.RotateKeys(gracePeriod); err != nil {
+				logger.Error("Failed to rotate keys", zap.Error(err))
+			}
+			keyManager.CleanupExpiredKeys()
+		}
+	}()
+
 	// Initialize token generator
 	tokenGen := auth.NewTokenGenerator(
 		keyManager,

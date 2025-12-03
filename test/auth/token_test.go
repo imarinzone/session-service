@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"session-service/internal/auth"
+	"session-service/internal/models"
 
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -95,26 +96,30 @@ func TestGenerateAccessToken(t *testing.T) {
 	tg := auth.NewTokenGenerator(km, issuer, audience, accessTokenExpiry, 32)
 
 	tests := []struct {
-		name     string
-		clientID string
+		name    string
+		subject *models.TokenSubject
 	}{
 		{
-			name:     "valid client ID",
-			clientID: "client-123",
+			name: "basic subject",
+			subject: &models.TokenSubject{
+				UserID:   "user-123",
+				TenantID: "tenant-abc",
+				Roles:    []string{"reader"},
+				Scopes:   []string{"sessions:read"},
+			},
 		},
 		{
-			name:     "UUID client ID",
-			clientID: "550e8400-e29b-41d4-a716-446655440000",
-		},
-		{
-			name:     "empty client ID",
-			clientID: "",
+			name: "subject without roles/scopes",
+			subject: &models.TokenSubject{
+				UserID:   "user-456",
+				TenantID: "tenant-def",
+			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tokenString, jti, err := tg.GenerateAccessToken(tt.clientID)
+			tokenString, jti, err := tg.GenerateAccessToken(tt.subject)
 
 			if err != nil {
 				t.Fatalf("GenerateAccessToken() error = %v", err)
@@ -134,7 +139,8 @@ func TestGenerateAccessToken(t *testing.T) {
 				if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
 					t.Errorf("unexpected signing method: %v", token.Header["alg"])
 				}
-				return km.GetPublicKey(), nil
+				// Use the current public key from the key manager
+				return km.GetPrivateKey().Public(), nil
 			})
 
 			if err != nil {
@@ -161,9 +167,41 @@ func TestGenerateAccessToken(t *testing.T) {
 				t.Errorf("audience = %v, want %v", aud, audience)
 			}
 
-			// Check subject (clientID)
-			if sub, ok := claims["sub"].(string); !ok || sub != tt.clientID {
-				t.Errorf("subject = %v, want %v", sub, tt.clientID)
+			// Check subject (userID)
+			if sub, ok := claims["sub"].(string); !ok || sub != tt.subject.UserID {
+				t.Errorf("subject = %v, want %v", sub, tt.subject.UserID)
+			}
+
+			// Check oid
+			if oid, ok := claims["oid"].(string); !ok || oid != tt.subject.UserID {
+				t.Errorf("oid = %v, want %v", oid, tt.subject.UserID)
+			}
+
+			// Check tid
+			if tid, ok := claims["tid"].(string); !ok || tid != tt.subject.TenantID {
+				t.Errorf("tid = %v, want %v", tid, tt.subject.TenantID)
+			}
+
+			// Check roles, if expected
+			if len(tt.subject.Roles) > 0 {
+				if roles, ok := claims["roles"].([]interface{}); ok {
+					if len(roles) != len(tt.subject.Roles) {
+						t.Errorf("roles length = %d, want %d", len(roles), len(tt.subject.Roles))
+					}
+				} else {
+					t.Errorf("roles claim missing or wrong type")
+				}
+			}
+
+			// Check scopes, if expected
+			if len(tt.subject.Scopes) > 0 {
+				if scp, ok := claims["scp"].([]interface{}); ok {
+					if len(scp) != len(tt.subject.Scopes) {
+						t.Errorf("scp length = %d, want %d", len(scp), len(tt.subject.Scopes))
+					}
+				} else {
+					t.Errorf("scp claim missing or wrong type")
+				}
 			}
 
 			// Check jti
@@ -204,9 +242,12 @@ func TestGenerateAccessToken_MultipleCallsProduceDifferentTokens(t *testing.T) {
 	km := createTestKeyManager(t)
 	tg := auth.NewTokenGenerator(km, "issuer", "audience", 15*time.Minute, 32)
 
-	clientID := "test-client"
+	subject := &models.TokenSubject{
+		UserID:   "user-xyz",
+		TenantID: "tenant-xyz",
+	}
 
-	token1, jti1, err := tg.GenerateAccessToken(clientID)
+	token1, jti1, err := tg.GenerateAccessToken(subject)
 	if err != nil {
 		t.Fatalf("first GenerateAccessToken() error = %v", err)
 	}
@@ -214,7 +255,7 @@ func TestGenerateAccessToken_MultipleCallsProduceDifferentTokens(t *testing.T) {
 	// Small delay to ensure different timestamps
 	time.Sleep(10 * time.Millisecond)
 
-	token2, jti2, err := tg.GenerateAccessToken(clientID)
+	token2, jti2, err := tg.GenerateAccessToken(subject)
 	if err != nil {
 		t.Fatalf("second GenerateAccessToken() error = %v", err)
 	}

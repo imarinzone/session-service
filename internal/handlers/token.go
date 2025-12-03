@@ -10,6 +10,7 @@ import (
 	"session-service/internal/database"
 	"session-service/internal/models"
 	"session-service/pkg/errors"
+	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -124,8 +125,68 @@ func (h *TokenHandler) handleClientCredentials(ctx context.Context, w http.Respo
 		return
 	}
 
+	// Parse trusted user provisioning fields (confidential clients only)
+	userID := r.FormValue("user_id")
+	tenantID := r.FormValue("tenant_id")
+	userFullName := r.FormValue("user_full_name")
+	userPhone := r.FormValue("user_phone")
+	userEmail := r.FormValue("user_email")
+	userRolesRaw := r.FormValue("user_roles")
+
+	// Require user_id and tenant_id for this flow; no client-only tokens.
+	if userID == "" || tenantID == "" {
+		h.sendError(w, errors.ErrInvalidRequest)
+		return
+	}
+
+	// Basic validation of required PII-bearing fields for provisioning
+	if userFullName == "" || userPhone == "" {
+		h.sendError(w, errors.ErrInvalidRequest)
+		return
+	}
+
+	// Ensure tenant exists (strict: no auto-create)
+	if err := h.repo.EnsureTenantExists(ctx, tenantID); err != nil {
+		h.logger.Error("Tenant does not exist for token request", zap.String("tenant_id", tenantID), zap.Error(err))
+		h.sendError(w, errors.Wrap(err, errors.ErrInvalidRequest))
+		return
+	}
+
+	// Parse roles, if provided
+	var roles []string
+	if userRolesRaw != "" {
+		for _, rStr := range strings.Split(userRolesRaw, ",") {
+			rStr = strings.TrimSpace(rStr)
+			if rStr != "" {
+				roles = append(roles, rStr)
+			}
+		}
+	}
+
+	user := models.User{
+		ID:          userID,
+		TenantID:    tenantID,
+		Email:       userEmail,
+		FullName:    userFullName,
+		PhoneNumber: userPhone,
+	}
+
+	if err := h.repo.UpsertUserAndRoles(ctx, user, roles); err != nil {
+		h.logger.Error("Failed to upsert user and roles", zap.String("user_id", userID), zap.Error(err))
+		h.sendError(w, errors.Wrap(err, errors.ErrInternalServer))
+		return
+	}
+
+	// Build token subject using provided user and roles
+	subject := &models.TokenSubject{
+		UserID:   userID,
+		TenantID: tenantID,
+		Roles:    roles,
+		// Scopes are derived from client configuration/request; keep empty for now
+	}
+
 	// Generate tokens
-	accessToken, _, err := h.tokenGen.GenerateAccessToken(clientID)
+	accessToken, _, err := h.tokenGen.GenerateAccessToken(subject)
 	if err != nil {
 		h.logger.Error("Failed to generate access token", zap.Error(err))
 		h.sendError(w, errors.Wrap(err, errors.ErrInternalServer))
@@ -139,9 +200,10 @@ func (h *TokenHandler) handleClientCredentials(ctx context.Context, w http.Respo
 		return
 	}
 
-	// Store refresh token
+	// Store refresh token, including subject so refresh can recreate claims
 	refreshTokenData := &models.RefreshTokenData{
 		ClientID:  clientID,
+		Subject:   subject,
 		ExpiresAt: time.Now().Add(h.config.RefreshTokenExpiry),
 	}
 	if err := h.cache.StoreRefreshToken(ctx, refreshToken, refreshTokenData, h.config.RefreshTokenExpiry); err != nil {
@@ -206,6 +268,7 @@ func (h *TokenHandler) handleRefreshToken(ctx context.Context, w http.ResponseWr
 	}
 
 	clientID := tokenData.ClientID
+	subject := tokenData.Subject
 
 	// Get client to check rate limit
 	client, err := h.repo.GetClientByID(ctx, clientID)
@@ -240,8 +303,14 @@ func (h *TokenHandler) handleRefreshToken(ctx context.Context, w http.ResponseWr
 		h.logger.Warn("Failed to delete old refresh token", zap.Error(err))
 	}
 
-	// Generate new tokens
-	accessToken, _, err := h.tokenGen.GenerateAccessToken(clientID)
+	// Generate new tokens with the same subject as the original token
+	if subject == nil {
+		h.logger.Error("Refresh token missing subject; cannot re-issue access token", zap.String("client_id", clientID))
+		h.sendError(w, errors.ErrInvalidRefreshToken)
+		return
+	}
+
+	accessToken, _, err := h.tokenGen.GenerateAccessToken(subject)
 	if err != nil {
 		h.logger.Error("Failed to generate access token", zap.Error(err))
 		h.sendError(w, errors.Wrap(err, errors.ErrInternalServer))

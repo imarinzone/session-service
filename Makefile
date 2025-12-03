@@ -122,9 +122,9 @@ generate-keys: ## Generate RSA key pair for JWT and update .env
 dev-setup: generate-keys docker-up migrate ## Complete development setup
 	@echo "$(GREEN)Development environment ready!$(NC)"
 	@echo "$(YELLOW)Don't forget to:$(NC)"
-	@echo "  1. Update .env with your generated keys"
-	@echo "  2. Create a client in the database"
-	@echo "  3. Run 'make run' to start the service"
+	@echo "  1. Verify .env contains JWT keys and key rotation settings (KEY_ROTATION_DAYS, KEY_GRACE_DAYS)"
+	@echo "  2. Create a client (and any tenants/users) in the database using 'make create-client', 'make create-tenant', 'make create-user' or SQL"
+	@echo "  3. Run 'make run' to start the service locally"
 
 create-client: ## Create a test client (requires DATABASE_URL or docker-compose)
 	@echo "$(GREEN)Creating test client...$(NC)"
@@ -139,6 +139,42 @@ create-client: ## Create a test client (requires DATABASE_URL or docker-compose)
 	fi; \
 	psql $$DB_URL -c "INSERT INTO clients (client_id, client_secret_hash, rate_limit) VALUES ('$$CLIENT_ID', '$$HASH', 100) ON CONFLICT (client_id) DO UPDATE SET client_secret_hash = EXCLUDED.client_secret_hash, rate_limit = EXCLUDED.rate_limit;"; \
 	echo "$(GREEN)Client created/updated: $$CLIENT_ID$(NC)"
+
+create-tenant: ## Create or update a tenant record
+	@echo "$(GREEN)Creating/updating tenant...$(NC)"
+	@read -p "Tenant ID (internal, required): " TENANT_ID; \
+	read -p "External Tenant ID (optional): " EXTERNAL_TID; \
+	read -p "Tenant Name: " TENANT_NAME; \
+	if [ -z "$$TENANT_ID" ] || [ -z "$$TENANT_NAME" ]; then \
+		echo "$(YELLOW)Tenant ID and Tenant Name are required.$(NC)"; \
+		exit 1; \
+	fi; \
+	if [ -z "$(DATABASE_URL)" ]; then \
+		DB_URL="postgres://user:password@localhost:5432/sessiondb?sslmode=disable"; \
+	else \
+		DB_URL="$(DATABASE_URL)"; \
+	fi; \
+	psql $$DB_URL -c "INSERT INTO tenants (id, external_tid, name) VALUES ('$$TENANT_ID', NULLIF('$$EXTERNAL_TID',''), '$$TENANT_NAME') ON CONFLICT (id) DO UPDATE SET external_tid = EXCLUDED.external_tid, name = EXCLUDED.name;"; \
+	echo "$(GREEN)Tenant created/updated: $$TENANT_ID$(NC)"
+
+create-user: ## Create or update a user record
+	@echo "$(GREEN)Creating/updating user...$(NC)"
+	@read -p "User ID (internal, required): " USER_ID; \
+	read -p "Tenant ID (must already exist): " TENANT_ID; \
+	read -p "Email (optional): " EMAIL; \
+	read -p "Full Name (optional): " FULL_NAME; \
+	read -p "Phone Number (optional): " PHONE; \
+	if [ -z "$$USER_ID" ] || [ -z "$$TENANT_ID" ]; then \
+		echo "$(YELLOW)User ID and Tenant ID are required.$(NC)"; \
+		exit 1; \
+	fi; \
+	if [ -z "$(DATABASE_URL)" ]; then \
+		DB_URL="postgres://user:password@localhost:5432/sessiondb?sslmode=disable"; \
+	else \
+		DB_URL="$(DATABASE_URL)"; \
+	fi; \
+	psql $$DB_URL -c "INSERT INTO users (id, tenant_id, email, full_name, phone_number) VALUES ('$$USER_ID', '$$TENANT_ID', NULLIF('$$EMAIL',''), NULLIF('$$FULL_NAME',''), NULLIF('$$PHONE','')) ON CONFLICT (id) DO UPDATE SET tenant_id = EXCLUDED.tenant_id, email = EXCLUDED.email, full_name = EXCLUDED.full_name, phone_number = EXCLUDED.phone_number;"; \
+	echo "$(GREEN)User created/updated: $$USER_ID (tenant $$TENANT_ID)$(NC)"
 
 install-tools: ## Install development tools
 	@echo "$(GREEN)Installing development tools...$(NC)"

@@ -35,7 +35,16 @@ func (tv *TokenValidator) ValidateToken(ctx context.Context, tokenString string)
 		if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
-		return tv.keyManager.GetPublicKey(), nil
+		// Require kid so we always pick an explicit key; no fallback.
+		kid, ok := token.Header["kid"].(string)
+		if !ok || kid == "" {
+			return nil, fmt.Errorf("missing kid in token header")
+		}
+		pub, err := tv.keyManager.GetPublicKeyByID(kid)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get public key for kid %s: %w", kid, err)
+		}
+		return pub, nil
 	}, jwt.WithValidMethods([]string{"RS256"}))
 
 	if err != nil {

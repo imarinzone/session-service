@@ -40,13 +40,10 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgres://sessionuser:sessionpass@postgres:5432/sessiondb?sslmode=disable
+      DATABASE_URL: postgres://user:password@postgres:5432/sessiondb?sslmode=disable
       REDIS_URL: redis://redis:6379/0
-      JWT_PRIVATE_KEY_B64: ${JWT_PRIVATE_KEY_B64}
-      JWT_PUBLIC_KEY_B64: ${JWT_PUBLIC_KEY_B64}
-      # Fallback to plain keys if base64 not available
-      JWT_PRIVATE_KEY: ${JWT_PRIVATE_KEY:-}
-      JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY:-}
+      JWT_PRIVATE_KEY: ${JWT_PRIVATE_KEY}
+      JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY}
       JWT_ISSUER: ${JWT_ISSUER:-session-service}
       JWT_AUDIENCE: ${JWT_AUDIENCE:-api}
       JWT_EXPIRY: ${JWT_EXPIRY:-3600s}

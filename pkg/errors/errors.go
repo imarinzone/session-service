@@ -34,6 +34,14 @@ var (
 		Status:  400,
 	}
 
+	// ErrInvalidRequest is used for syntactically invalid requests (missing or
+	// malformed parameters) where a 400 response is appropriate.
+	ErrInvalidRequest = &ServiceError{
+		Code:    "INVALID_REQUEST",
+		Message: "Invalid request",
+		Status:  400,
+	}
+
 	ErrInvalidRefreshToken = &ServiceError{
 		Code:    "INVALID_REFRESH_TOKEN",
 		Message: "Invalid or expired refresh token",

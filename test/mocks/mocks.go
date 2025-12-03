@@ -31,6 +31,36 @@ func (m *MockRepository) UpdateClientUpdatedAt(ctx context.Context, clientID str
 	return args.Error(0)
 }
 
+// GetUserByID mocks fetching a user by ID
+func (m *MockRepository) GetUserByID(ctx context.Context, userID string) (*models.User, error) {
+	args := m.Called(ctx, userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.User), args.Error(1)
+}
+
+// GetUserRoles mocks fetching roles for a user
+func (m *MockRepository) GetUserRoles(ctx context.Context, userID string) ([]string, error) {
+	args := m.Called(ctx, userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]string), args.Error(1)
+}
+
+// EnsureTenantExists mocks checking for tenant existence
+func (m *MockRepository) EnsureTenantExists(ctx context.Context, tenantID string) error {
+	args := m.Called(ctx, tenantID)
+	return args.Error(0)
+}
+
+// UpsertUserAndRoles mocks upserting a user and roles
+func (m *MockRepository) UpsertUserAndRoles(ctx context.Context, user models.User, roles []string) error {
+	args := m.Called(ctx, user, roles)
+	return args.Error(0)
+}
+
 // MockCache is a mock implementation of cache.Cache
 type MockCache struct {
 	mock.Mock

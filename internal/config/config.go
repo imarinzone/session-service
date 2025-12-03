@@ -28,6 +28,8 @@ type Config struct {
 	RefreshTokenLength int
 	ServerPort         string
 	BaseURL            string
+	KeyRotationDays    int
+	KeyGraceDays       int
 }
 
 // Load loads configuration from environment variables
@@ -55,6 +57,8 @@ func Load() (*Config, error) {
 		RefreshTokenLength: getIntEnv("REFRESH_TOKEN_LENGTH", 32),
 		ServerPort:         getEnv("SERVER_PORT", "8080"),
 		BaseURL:            getEnv("BASE_URL", "http://localhost:8080"),
+		KeyRotationDays:    getIntEnv("KEY_ROTATION_DAYS", 90),
+		KeyGraceDays:       getIntEnv("KEY_GRACE_DAYS", 14),
 	}
 
 	if cfg.JWTPrivateKey == "" || cfg.JWTPublicKey == "" {

@@ -1,23 +1,39 @@
 package auth
 
 import (
+	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"sync"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/lestrrat-go/jwx/v2/jwk"
 )
 
-// KeyManager manages JWT keys and JWKS
-type KeyManager struct {
-	privateKey *rsa.PrivateKey
-	publicKey  *rsa.PublicKey
-	keySet     jwk.Set
+// KeyPair represents a single signing key and its metadata.
+type KeyPair struct {
+	KeyID      string
+	PrivateKey *rsa.PrivateKey
+	PublicKey  *rsa.PublicKey
+	CreatedAt  time.Time
+	ExpiresAt  time.Time
+	IsActive   bool
 }
 
-// NewKeyManager creates a new key manager from PEM-encoded keys
+// KeyManager manages JWT keys, rotation, and JWKS.
+// It is designed to support multiple active keys (current + previous) like Azure AD / Hydra.
+type KeyManager struct {
+	mu           sync.RWMutex
+	keys         map[string]*KeyPair
+	currentKeyID string
+}
+
+// NewKeyManager creates a new key manager from an initial PEM-encoded key pair.
+// Additional keys may be generated at runtime for rotation.
 func NewKeyManager(privateKeyPEM, publicKeyPEM string) (*KeyManager, error) {
 	// Parse private key
 	privateKey, err := parseRSAPrivateKey(privateKeyPEM)
@@ -31,34 +47,138 @@ func NewKeyManager(privateKeyPEM, publicKeyPEM string) (*KeyManager, error) {
 		return nil, fmt.Errorf("failed to parse public key: %w", err)
 	}
 
-	// Create JWK set
-	keySet, err := createJWKSet(publicKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create JWK set: %w", err)
+	keyID := uuid.New().String()
+	now := time.Now()
+
+	initialKey := &KeyPair{
+		KeyID:      keyID,
+		PrivateKey: privateKey,
+		PublicKey:  publicKey,
+		CreatedAt:  now,
+		// ExpiresAt is managed by rotation logic; zero means no explicit expiry yet.
+		IsActive: true,
 	}
 
 	return &KeyManager{
-		privateKey: privateKey,
-		publicKey:  publicKey,
-		keySet:     keySet,
+		keys: map[string]*KeyPair{
+			keyID: initialKey,
+		},
+		currentKeyID: keyID,
 	}, nil
 }
 
-// GetPrivateKey returns the private key
+// GetPrivateKey returns the current private key used for signing.
 func (km *KeyManager) GetPrivateKey() *rsa.PrivateKey {
-	return km.privateKey
+	km.mu.RLock()
+	defer km.mu.RUnlock()
+
+	if key, ok := km.keys[km.currentKeyID]; ok && key.IsActive {
+		return key.PrivateKey
+	}
+	return nil
 }
 
-// GetPublicKey returns the public key
-func (km *KeyManager) GetPublicKey() *rsa.PublicKey {
-	return km.publicKey
+// GetCurrentKeyID returns the kid of the current signing key.
+func (km *KeyManager) GetCurrentKeyID() string {
+	km.mu.RLock()
+	defer km.mu.RUnlock()
+	return km.currentKeyID
 }
 
-// GetJWKSet returns the JWK set for JWKS endpoint
+// GetPublicKeyByID returns the public key for a given kid, if present and active.
+func (km *KeyManager) GetPublicKeyByID(keyID string) (*rsa.PublicKey, error) {
+	km.mu.RLock()
+	defer km.mu.RUnlock()
+
+	key, ok := km.keys[keyID]
+	if !ok || !key.IsActive {
+		return nil, fmt.Errorf("key not found or inactive: %s", keyID)
+	}
+	if !key.ExpiresAt.IsZero() && key.ExpiresAt.Before(time.Now()) {
+		return nil, fmt.Errorf("key expired: %s", keyID)
+	}
+	return key.PublicKey, nil
+}
+
+// GetJWKSet returns the JWK set for JWKS endpoint containing all active keys.
 func (km *KeyManager) GetJWKSet() jwk.Set {
-	return km.keySet
+	km.mu.RLock()
+	defer km.mu.RUnlock()
+
+	keySet := jwk.NewSet()
+	now := time.Now()
+
+	for _, kp := range km.keys {
+		if !kp.IsActive {
+			continue
+		}
+		if !kp.ExpiresAt.IsZero() && kp.ExpiresAt.Before(now) {
+			continue
+		}
+
+		jwkKey, err := jwk.FromRaw(kp.PublicKey)
+		if err != nil {
+			continue
+		}
+		_ = jwkKey.Set(jwk.KeyIDKey, kp.KeyID)
+		_ = jwkKey.Set(jwk.AlgorithmKey, "RS256")
+		_ = jwkKey.Set(jwk.KeyUsageKey, "sig")
+
+		_ = keySet.AddKey(jwkKey)
+	}
+
+	return keySet
 }
 
+// RotateKeys generates a new key pair and marks the old one for graceful deactivation.
+// gracePeriod defines how long the old key remains valid for verification.
+func (km *KeyManager) RotateKeys(gracePeriod time.Duration) error {
+	km.mu.Lock()
+	defer km.mu.Unlock()
+
+	// Generate new key pair
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return fmt.Errorf("failed to generate new RSA key: %w", err)
+	}
+	publicKey := &privateKey.PublicKey
+
+	keyID := uuid.New().String()
+	now := time.Now()
+
+	newKey := &KeyPair{
+		KeyID:      keyID,
+		PrivateKey: privateKey,
+		PublicKey:  publicKey,
+		CreatedAt:  now,
+		IsActive:   true,
+	}
+
+	// Mark previous current key to expire after gracePeriod
+	if current, ok := km.keys[km.currentKeyID]; ok {
+		current.ExpiresAt = now.Add(gracePeriod)
+	}
+
+	km.keys[keyID] = newKey
+	km.currentKeyID = keyID
+
+	return nil
+}
+
+// CleanupExpiredKeys removes keys that are past their ExpiresAt.
+func (km *KeyManager) CleanupExpiredKeys() {
+	km.mu.Lock()
+	defer km.mu.Unlock()
+
+	now := time.Now()
+	for id, kp := range km.keys {
+		if !kp.ExpiresAt.IsZero() && kp.ExpiresAt.Before(now) {
+			delete(km.keys, id)
+		}
+	}
+}
+
+// parseRSAPrivateKey parses a PEM-encoded RSA private key.
 func parseRSAPrivateKey(pemData string) (*rsa.PrivateKey, error) {
 	block, _ := pem.Decode([]byte(pemData))
 	if block == nil {
@@ -82,6 +202,7 @@ func parseRSAPrivateKey(pemData string) (*rsa.PrivateKey, error) {
 	return key, nil
 }
 
+// parseRSAPublicKey parses a PEM-encoded RSA public key.
 func parseRSAPublicKey(pemData string) (*rsa.PublicKey, error) {
 	block, _ := pem.Decode([]byte(pemData))
 	if block == nil {
@@ -105,25 +226,3 @@ func parseRSAPublicKey(pemData string) (*rsa.PublicKey, error) {
 
 	return rsaKey, nil
 }
-
-func createJWKSet(publicKey *rsa.PublicKey) (jwk.Set, error) {
-	key, err := jwk.FromRaw(publicKey)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := key.Set(jwk.KeyIDKey, "session-service-key"); err != nil {
-		return nil, err
-	}
-	if err := key.Set(jwk.AlgorithmKey, "RS256"); err != nil {
-		return nil, err
-	}
-
-	keySet := jwk.NewSet()
-	if err := keySet.AddKey(key); err != nil {
-		return nil, err
-	}
-
-	return keySet, nil
-}
-
