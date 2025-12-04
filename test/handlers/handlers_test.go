@@ -15,6 +15,7 @@ import (
 	"session-service/test/helpers"
 	"session-service/test/mocks"
 
+	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"go.uber.org/zap"
@@ -69,6 +70,8 @@ func TestHandleToken_ClientCredentials(t *testing.T) {
 	mockCache.On("CheckRateLimit", mock.Anything, clientID, 100, time.Minute).Return(false, nil)
 	// Tenant must exist
 	mockRepo.On("EnsureTenantExists", mock.Anything, tenantID).Return(nil)
+	// User doesn't exist (first-time login)
+	mockRepo.On("GetUserByID", mock.Anything, userID).Return(nil, nil)
 	// User + roles upsert
 	mockRepo.On("UpsertUserAndRoles", mock.Anything, mock.MatchedBy(func(u models.User) bool {
 		return u.ID == userID &&
@@ -83,20 +86,21 @@ func TestHandleToken_ClientCredentials(t *testing.T) {
 	mockCache.On("StoreRefreshToken", mock.Anything, mock.AnythingOfType("string"), mock.AnythingOfType("*models.RefreshTokenData"), cfg.RefreshTokenExpiry).Return(nil)
 	mockRepo.On("UpdateClientUpdatedAt", mock.Anything, clientID).Return(nil)
 
-	// Create request
+	// Create request with new Azure-style path format
 	form := url.Values{}
 	form.Add("grant_type", "client_credentials")
 	form.Add("client_id", clientID)
 	form.Add("client_secret", clientSecret)
 	form.Add("user_id", userID)
-	form.Add("tenant_id", tenantID)
 	form.Add("user_full_name", fullName)
 	form.Add("user_phone", phone)
 	form.Add("user_email", email)
 	form.Add("user_roles", rolesCSV)
 
-	req := httptest.NewRequest("POST", "/oauth/token", nil)
+	req := httptest.NewRequest("POST", "/"+tenantID+"/oauth2/v2.0/token", nil)
 	req.PostForm = form
+	// Set mux vars so handler can extract tenant_id from URL path
+	req = mux.SetURLVars(req, map[string]string{"tenant_id": tenantID})
 	rr := httptest.NewRecorder()
 
 	// Execute

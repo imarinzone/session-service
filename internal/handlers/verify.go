@@ -7,6 +7,7 @@ import (
 	"session-service/internal/models"
 	"session-service/pkg/errors"
 
+	"github.com/gorilla/mux"
 	"go.uber.org/zap"
 )
 
@@ -24,12 +25,31 @@ func NewVerifyHandler(validator *auth.TokenValidator, logger *zap.Logger) *Verif
 	}
 }
 
-// HandleVerify handles POST /oauth/verify
+// HandleVerify handles POST /{tenant_id}/oauth2/v1.0/verify
+// @Summary     Verify JWT token
+// @Description Validates a JWT access token and returns its claims if valid
+// @Tags        oauth2
+// @Param       tenant_id path string true "Tenant ID"
+// @Accept      application/json
+// @Produce     application/json
+// @Param       request body     models.VerifyRequest true "Token verification request"
+// @Success     200     {object} models.VerifyResponse
+// @Failure     400     {object} map[string]string
+// @Failure     500     {object} map[string]string
+// @Router      /{tenant_id}/oauth2/v1.0/verify [post]
 func (h *VerifyHandler) HandleVerify(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Extract tenant_id from URL path
+	vars := mux.Vars(r)
+	tenantIDFromPath := vars["tenant_id"]
+	if tenantIDFromPath == "" {
+		h.sendError(w, errors.ErrInvalidRequest)
 		return
 	}
 
@@ -53,6 +73,20 @@ func (h *VerifyHandler) HandleVerify(w http.ResponseWriter, r *http.Request) {
 			Message: err.Error(),
 		})
 		return
+	}
+
+	// Validate that tenant_id in path matches tenant_id in token claims
+	if tid, ok := claims["tid"].(string); ok {
+		if tid != tenantIDFromPath {
+			h.logger.Debug("Tenant ID mismatch",
+				zap.String("path_tenant_id", tenantIDFromPath),
+				zap.String("token_tenant_id", tid))
+			h.sendResponse(w, http.StatusOK, &models.VerifyResponse{
+				Valid:   false,
+				Message: "tenant_id in path does not match token tenant_id",
+			})
+			return
+		}
 	}
 
 	// Convert claims to map[string]interface{}
@@ -81,4 +115,3 @@ func (h *VerifyHandler) sendResponse(w http.ResponseWriter, status int, data *mo
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(data)
 }
-

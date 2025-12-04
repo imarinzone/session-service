@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gorilla/mux"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -46,12 +47,40 @@ func NewTokenHandler(
 	}
 }
 
-// HandleToken handles POST /oauth/token
+// HandleToken handles POST /{tenant_id}/oauth2/v2.0/token
+// @Summary     Get OAuth2 access and refresh tokens
+// @Description Issues access and refresh tokens using client_credentials or refresh_token grant types. Supports first-time user provisioning and subsequent authentication.
+// @Tags        oauth2
+// @Accept      application/x-www-form-urlencoded
+// @Produce     application/json
+// @Param       tenant_id      path     string  true  "Tenant ID"
+// @Param       grant_type     formData string  true  "Grant type: client_credentials or refresh_token"
+// @Param       client_id      formData string  false "Client ID (required for client_credentials)"
+// @Param       client_secret  formData string  false "Client Secret (required for client_credentials)"
+// @Param       user_id       formData string  false "User ID (required for client_credentials)"
+// @Param       user_full_name formData string  false "User full name (required for first-time login)"
+// @Param       user_phone     formData string  false "User phone (required for first-time login)"
+// @Param       user_email     formData string  false "User email (optional, first-time login only)"
+// @Param       user_roles     formData string  false "Comma-separated user roles (optional, first-time login only)"
+// @Param       refresh_token  formData string  false "Refresh token (required for refresh_token grant)"
+// @Success     200  {object}  models.TokenResponse
+// @Failure     400  {object}  map[string]string
+// @Failure     401  {object}  map[string]string
+// @Failure     500  {object}  map[string]string
+// @Router      /{tenant_id}/oauth2/v2.0/token [post]
 func (h *TokenHandler) HandleToken(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Extract tenant_id from URL path
+	vars := mux.Vars(r)
+	tenantIDFromPath := vars["tenant_id"]
+	if tenantIDFromPath == "" {
+		h.sendError(w, errors.ErrInvalidRequest)
 		return
 	}
 
@@ -64,15 +93,15 @@ func (h *TokenHandler) HandleToken(w http.ResponseWriter, r *http.Request) {
 
 	switch grantType {
 	case "client_credentials":
-		h.handleClientCredentials(ctx, w, r)
+		h.handleClientCredentials(ctx, w, r, tenantIDFromPath)
 	case "refresh_token":
-		h.handleRefreshToken(ctx, w, r)
+		h.handleRefreshToken(ctx, w, r, tenantIDFromPath)
 	default:
 		h.sendError(w, errors.ErrInvalidGrant)
 	}
 }
 
-func (h *TokenHandler) handleClientCredentials(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+func (h *TokenHandler) handleClientCredentials(ctx context.Context, w http.ResponseWriter, r *http.Request, tenantIDFromPath string) {
 	clientID := r.FormValue("client_id")
 	clientSecret := r.FormValue("client_secret")
 
@@ -125,22 +154,18 @@ func (h *TokenHandler) handleClientCredentials(ctx context.Context, w http.Respo
 		return
 	}
 
-	// Parse trusted user provisioning fields (confidential clients only)
+	// Parse user fields
 	userID := r.FormValue("user_id")
-	tenantID := r.FormValue("tenant_id")
 	userFullName := r.FormValue("user_full_name")
 	userPhone := r.FormValue("user_phone")
 	userEmail := r.FormValue("user_email")
 	userRolesRaw := r.FormValue("user_roles")
 
-	// Require user_id and tenant_id for this flow; no client-only tokens.
-	if userID == "" || tenantID == "" {
-		h.sendError(w, errors.ErrInvalidRequest)
-		return
-	}
+	// Use tenant_id from path (required)
+	tenantID := tenantIDFromPath
 
-	// Basic validation of required PII-bearing fields for provisioning
-	if userFullName == "" || userPhone == "" {
+	// Require user_id for this flow; no client-only tokens.
+	if userID == "" {
 		h.sendError(w, errors.ErrInvalidRequest)
 		return
 	}
@@ -152,37 +177,82 @@ func (h *TokenHandler) handleClientCredentials(ctx context.Context, w http.Respo
 		return
 	}
 
-	// Parse roles, if provided
-	var roles []string
-	if userRolesRaw != "" {
-		for _, rStr := range strings.Split(userRolesRaw, ",") {
-			rStr = strings.TrimSpace(rStr)
-			if rStr != "" {
-				roles = append(roles, rStr)
-			}
-		}
-	}
-
-	user := models.User{
-		ID:          userID,
-		TenantID:    tenantID,
-		Email:       userEmail,
-		FullName:    userFullName,
-		PhoneNumber: userPhone,
-	}
-
-	if err := h.repo.UpsertUserAndRoles(ctx, user, roles); err != nil {
-		h.logger.Error("Failed to upsert user and roles", zap.String("user_id", userID), zap.Error(err))
+	// Check if user exists
+	existingUser, err := h.repo.GetUserByID(ctx, userID)
+	if err != nil {
+		h.logger.Error("Failed to get user from database", zap.String("user_id", userID), zap.Error(err))
 		h.sendError(w, errors.Wrap(err, errors.ErrInternalServer))
 		return
 	}
 
-	// Build token subject using provided user and roles
-	subject := &models.TokenSubject{
-		UserID:   userID,
-		TenantID: tenantID,
-		Roles:    roles,
-		// Scopes are derived from client configuration/request; keep empty for now
+	var roles []string
+	var subject *models.TokenSubject
+
+	if existingUser == nil {
+		// First-time login: user doesn't exist, require user details
+		if userFullName == "" || userPhone == "" {
+			h.logger.Error("User does not exist and required fields missing",
+				zap.String("user_id", userID),
+				zap.Bool("has_full_name", userFullName != ""),
+				zap.Bool("has_phone", userPhone != ""))
+			h.sendError(w, errors.ErrInvalidRequest)
+			return
+		}
+
+		// Parse roles if provided
+		if userRolesRaw != "" {
+			for _, rStr := range strings.Split(userRolesRaw, ",") {
+				rStr = strings.TrimSpace(rStr)
+				if rStr != "" {
+					roles = append(roles, rStr)
+				}
+			}
+		}
+
+		// Upsert new user
+		user := models.User{
+			ID:          userID,
+			TenantID:    tenantID,
+			Email:       userEmail,
+			FullName:    userFullName,
+			PhoneNumber: userPhone,
+		}
+
+		if err := h.repo.UpsertUserAndRoles(ctx, user, roles); err != nil {
+			h.logger.Error("Failed to upsert user and roles", zap.String("user_id", userID), zap.Error(err))
+			h.sendError(w, errors.Wrap(err, errors.ErrInternalServer))
+			return
+		}
+
+		subject = &models.TokenSubject{
+			UserID:   userID,
+			TenantID: tenantID,
+			Roles:    roles,
+		}
+	} else {
+		// Subsequent login: user exists, verify tenant matches
+		if existingUser.TenantID != tenantID {
+			h.logger.Error("User belongs to different tenant",
+				zap.String("user_id", userID),
+				zap.String("user_tenant_id", existingUser.TenantID),
+				zap.String("request_tenant_id", tenantID))
+			h.sendError(w, errors.ErrInvalidRequest)
+			return
+		}
+
+		// Get roles from database
+		roles, err = h.repo.GetUserRoles(ctx, userID)
+		if err != nil {
+			h.logger.Error("Failed to get user roles", zap.String("user_id", userID), zap.Error(err))
+			h.sendError(w, errors.Wrap(err, errors.ErrInternalServer))
+			return
+		}
+
+		subject = &models.TokenSubject{
+			UserID:   userID,
+			TenantID: tenantID,
+			Roles:    roles,
+		}
 	}
 
 	// Generate tokens
@@ -228,7 +298,7 @@ func (h *TokenHandler) handleClientCredentials(ctx context.Context, w http.Respo
 	h.sendJSON(w, http.StatusOK, response)
 }
 
-func (h *TokenHandler) handleRefreshToken(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+func (h *TokenHandler) handleRefreshToken(ctx context.Context, w http.ResponseWriter, r *http.Request, tenantIDFromPath string) {
 	refreshToken := r.FormValue("refresh_token")
 
 	if refreshToken == "" {
@@ -269,6 +339,20 @@ func (h *TokenHandler) handleRefreshToken(ctx context.Context, w http.ResponseWr
 
 	clientID := tokenData.ClientID
 	subject := tokenData.Subject
+
+	// Validate that tenant_id from path matches the tenant_id in the refresh token subject
+	if subject == nil || subject.TenantID != tenantIDFromPath {
+		h.logger.Error("Tenant ID mismatch between path and refresh token",
+			zap.String("path_tenant_id", tenantIDFromPath),
+			zap.String("token_tenant_id", func() string {
+				if subject != nil {
+					return subject.TenantID
+				}
+				return "<nil>"
+			}()))
+		h.sendError(w, errors.ErrInvalidRefreshToken)
+		return
+	}
 
 	// Get client to check rate limit
 	client, err := h.repo.GetClientByID(ctx, clientID)
@@ -327,6 +411,7 @@ func (h *TokenHandler) handleRefreshToken(ctx context.Context, w http.ResponseWr
 	// Store new refresh token
 	newRefreshTokenData := &models.RefreshTokenData{
 		ClientID:  clientID,
+		Subject:   subject, // Preserve subject for future refreshes
 		ExpiresAt: time.Now().Add(h.config.RefreshTokenExpiry),
 	}
 	if err := h.cache.StoreRefreshToken(ctx, newRefreshToken, newRefreshTokenData, h.config.RefreshTokenExpiry); err != nil {

@@ -138,10 +138,12 @@ curl http://localhost:8080/.well-known/openid-configuration
 #### Get Access Token (Client Credentials Grant)
 
 ```bash
-curl -X POST http://localhost:8080/oauth2/v1.0/token \
+curl -X POST http://localhost:8080/tenant-abc/oauth2/v2.0/token \
   -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "grant_type=client_credentials&client_id=my-client&client_secret=your-secret"
+  -d "grant_type=client_credentials&client_id=my-client&client_secret=your-secret&user_id=user-123"
 ```
+
+> **Note:** Replace `tenant-abc` with your actual tenant ID. All endpoints (except `.well-known/openid-configuration`) require `tenant_id` in the path.
 
 Response:
 ```json
@@ -156,7 +158,7 @@ Response:
 #### Refresh Token
 
 ```bash
-curl -X POST http://localhost:8080/oauth2/v1.0/token \
+curl -X POST http://localhost:8080/tenant-abc/oauth2/v2.0/token \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "grant_type=refresh_token&refresh_token=abc123..."
 ```
@@ -164,15 +166,17 @@ curl -X POST http://localhost:8080/oauth2/v1.0/token \
 #### Verify Token
 
 ```bash
-curl -X POST http://localhost:8080/oauth2/v1.0/verify \
+curl -X POST http://localhost:8080/tenant-abc/oauth2/v1.0/verify \
   -H "Content-Type: application/json" \
   -d '{"token": "eyJ..."}'
 ```
 
+> **Note:** The `tenant_id` in the path must match the `tid` claim in the JWT token.
+
 #### Get JWKS
 
 ```bash
-curl http://localhost:8080/discovery/v1.0/keys
+curl http://localhost:8080/tenant-abc/discovery/v1.0/keys
 ```
 
 ## API Endpoints
@@ -181,9 +185,17 @@ curl http://localhost:8080/discovery/v1.0/keys
 
 OpenID Connect discovery endpoint. Returns service configuration including token endpoint, JWKS URI, and supported capabilities.
 
-### POST /oauth2/v1.0/token
+> **Note:** This is the only endpoint that does NOT require `tenant_id` in the path. All other endpoints are tenant-scoped.
 
-Issues access and refresh tokens.
+### POST /{tenant_id}/oauth2/v2.0/token
+
+Issues access and refresh tokens. This endpoint is **tenant-scoped**, meaning the `tenant_id` is part of the URL path.
+
+**Path Parameters:**
+
+| Parameter | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| `tenant_id` | string | Yes | Internal tenant ID (must already exist in the `tenants` table). |
 
 **Client Credentials Grant:**
 ```
@@ -198,9 +210,9 @@ grant_type=refresh_token
 refresh_token=<refresh_token>
 ```
 
-### POST /oauth2/v1.0/verify
+### POST /{tenant_id}/oauth2/v1.0/verify
 
-Validates a JWT token and returns claims if valid.
+Validates a JWT token and returns claims if valid. The `tenant_id` in the path must match the `tid` claim in the token.
 
 **Request:**
 ```json
@@ -224,17 +236,25 @@ Validates a JWT token and returns claims if valid.
 }
 ```
 
-### GET /discovery/v1.0/keys
+### GET /{tenant_id}/discovery/v1.0/keys
 
-Returns the public keys in JWKS format for JWT validation.
+Returns the public keys in JWKS format for JWT validation. This endpoint is **tenant-scoped**.
 
-### GET /oauth2/v1.0/authorize
+**Path Parameters:**
 
-Alternate JWKS endpoint (same as `/discovery/v1.0/keys`).
+| Parameter | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| `tenant_id` | string | Yes | Internal tenant ID (must already exist in the `tenants` table). |
 
-### GET /health
+### GET /{tenant_id}/health
 
-Health check endpoint.
+Health check endpoint. This endpoint is **tenant-scoped**.
+
+**Path Parameters:**
+
+| Parameter | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| `tenant_id` | string | Yes | Internal tenant ID. |
 
 ## Configuration
 
@@ -259,7 +279,7 @@ Environment variables:
 ### JWT Authorizer Setup
 
 1. Configure API Gateway JWT Authorizer:
-   - **JWKS URI**: `https://your-service/discovery/v1.0/keys`
+   - **JWKS URI**: `https://your-service/{tenant_id}/discovery/v1.0/keys`
    - **Issuer**: Value of `JWT_ISSUER` (default: `session-service`)
    - **Audience**: Value of `JWT_AUDIENCE` (default: `api`)
 

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"session-service/internal/auth"
 
+	"github.com/gorilla/mux"
 	"go.uber.org/zap"
 )
 
@@ -22,12 +23,24 @@ func NewJWKSHandler(keyManager *auth.KeyManager, logger *zap.Logger) *JWKSHandle
 	}
 }
 
-// HandleJWKS handles GET /oauth2/v2.0/authorize
+// HandleJWKS handles GET /{tenant_id}/discovery/v1.0/keys
+// @Summary     Get JSON Web Key Set (JWKS)
+// @Description Returns the public keys in JWKS format for JWT validation. Supports key rotation with multiple active keys.
+// @Tags        oidc
+// @Param       tenant_id path string true "Tenant ID"
+// @Produce     application/json
+// @Success     200  {object}  map[string]interface{} "JWKS response"
+// @Failure     500  {object}  map[string]string
+// @Router      /{tenant_id}/discovery/v1.0/keys [get]
 func (h *JWKSHandler) HandleJWKS(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+
+	// Extract tenant_id from URL path (for consistency, though not used in JWKS response)
+	vars := mux.Vars(r)
+	_ = vars["tenant_id"] // tenant_id is in path but not used for JWKS (keys are shared)
 
 	keySet := h.keyManager.GetJWKSet()
 

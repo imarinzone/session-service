@@ -1,0 +1,254 @@
+basePath: /
+definitions:
+  handlers.OIDCConfiguration:
+    properties:
+      claims_supported:
+        items:
+          type: string
+        type: array
+      id_token_signing_alg_values_supported:
+        items:
+          type: string
+        type: array
+      issuer:
+        type: string
+      jwks_uri:
+        type: string
+      request_uri_parameter_supported:
+        type: boolean
+      response_modes_supported:
+        items:
+          type: string
+        type: array
+      response_types_supported:
+        items:
+          type: string
+        type: array
+      scopes_supported:
+        items:
+          type: string
+        type: array
+      subject_types_supported:
+        items:
+          type: string
+        type: array
+      token_endpoint:
+        type: string
+      token_endpoint_auth_methods_supported:
+        items:
+          type: string
+        type: array
+    type: object
+  models.TokenResponse:
+    properties:
+      access_token:
+        type: string
+      expires_in:
+        type: integer
+      refresh_token:
+        type: string
+      token_type:
+        type: string
+    type: object
+  models.VerifyRequest:
+    properties:
+      token:
+        type: string
+    type: object
+  models.VerifyResponse:
+    properties:
+      claims:
+        additionalProperties: true
+        type: object
+      message:
+        type: string
+      valid:
+        type: boolean
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: support@swagger.io
+    name: API Support
+    url: http://www.swagger.io/support
+  description: OAuth2/OIDC session service with multi-tenant support and JWT token
+    management
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  termsOfService: http://swagger.io/terms/
+  title: Session Service API
+  version: "1.0"
+paths:
+  /.well-known/openid-configuration:
+    get:
+      description: Returns the OpenID Connect discovery document with endpoints and
+        supported features
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.OIDCConfiguration'
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get OpenID Connect configuration
+      tags:
+      - oidc
+  /{tenant_id}/discovery/v1.0/keys:
+    get:
+      description: Returns the public keys in JWKS format for JWT validation. Supports
+        key rotation with multiple active keys.
+      parameters:
+      - description: Tenant ID
+        in: path
+        name: tenant_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: JWKS response
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get JSON Web Key Set (JWKS)
+      tags:
+      - oidc
+  /{tenant_id}/oauth2/v1.0/verify:
+    post:
+      consumes:
+      - application/json
+      description: Validates a JWT access token and returns its claims if valid
+      parameters:
+      - description: Tenant ID
+        in: path
+        name: tenant_id
+        required: true
+        type: string
+      - description: Token verification request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.VerifyRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.VerifyResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Verify JWT token
+      tags:
+      - oauth2
+  /{tenant_id}/oauth2/v2.0/token:
+    post:
+      consumes:
+      - application/x-www-form-urlencoded
+      description: Issues access and refresh tokens using client_credentials or refresh_token
+        grant types. Supports first-time user provisioning and subsequent authentication.
+      parameters:
+      - description: Tenant ID
+        in: path
+        name: tenant_id
+        required: true
+        type: string
+      - description: 'Grant type: client_credentials or refresh_token'
+        in: formData
+        name: grant_type
+        required: true
+        type: string
+      - description: Client ID (required for client_credentials)
+        in: formData
+        name: client_id
+        type: string
+      - description: Client Secret (required for client_credentials)
+        in: formData
+        name: client_secret
+        type: string
+      - description: User ID (required for client_credentials)
+        in: formData
+        name: user_id
+        type: string
+      - description: User full name (required for first-time login)
+        in: formData
+        name: user_full_name
+        type: string
+      - description: User phone (required for first-time login)
+        in: formData
+        name: user_phone
+        type: string
+      - description: User email (optional, first-time login only)
+        in: formData
+        name: user_email
+        type: string
+      - description: Comma-separated user roles (optional, first-time login only)
+        in: formData
+        name: user_roles
+        type: string
+      - description: Refresh token (required for refresh_token grant)
+        in: formData
+        name: refresh_token
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.TokenResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get OAuth2 access and refresh tokens
+      tags:
+      - oauth2
+securityDefinitions:
+  BasicAuth:
+    type: basic
+  BearerAuth:
+    description: 'Bearer token authentication. Format: "Bearer {token}"'
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

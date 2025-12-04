@@ -181,6 +181,24 @@ install-tools: ## Install development tools
 	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 	@echo "$(GREEN)Tools installed!$(NC)"
 
+swagger: ## Generate Swagger documentation
+	@echo "$(GREEN)Generating Swagger documentation...$(NC)"
+	@if ! command -v swag > /dev/null && [ ! -f $$(go env GOPATH)/bin/swag ] && [ ! -f $(HOME)/go/bin/swag ]; then \
+		echo "$(YELLOW)swag not found. Installing...$(NC)"; \
+		go install github.com/swaggo/swag/cmd/swag@latest; \
+	fi
+	@if command -v swag > /dev/null; then \
+		swag init -g cmd/server/main.go -o docs; \
+	elif [ -f $$(go env GOPATH)/bin/swag ]; then \
+		$$(go env GOPATH)/bin/swag init -g cmd/server/main.go -o docs; \
+	elif [ -f $(HOME)/go/bin/swag ]; then \
+		$(HOME)/go/bin/swag init -g cmd/server/main.go -o docs; \
+	else \
+		echo "$(YELLOW)swag not found. Please install it manually: go install github.com/swaggo/swag/cmd/swag@latest$(NC)"; \
+		exit 1; \
+	fi
+	@echo "$(GREEN)Swagger documentation generated in docs/$(NC)"
+
 ci: deps lint test ## Run CI checks (deps, lint, test)
 
 all: clean deps build test ## Clean, download deps, build, and test

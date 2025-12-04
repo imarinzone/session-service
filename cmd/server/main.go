@@ -11,13 +11,34 @@ import (
 	"session-service/internal/config"
 	"session-service/internal/database"
 	"session-service/internal/handlers"
-	"session-service/internal/middleware"
 	"syscall"
 	"time"
 
-	"github.com/gorilla/mux"
 	"go.uber.org/zap"
+
+	_ "session-service/docs" // swagger docs
 )
+
+// @title           Session Service API
+// @version         1.0
+// @description     OAuth2/OIDC session service with multi-tenant support and JWT token management
+// @termsOfService  http://swagger.io/terms/
+
+// @contact.name   API Support
+// @contact.url    http://www.swagger.io/support
+// @contact.email  support@swagger.io
+
+// @license.name  MIT
+// @license.url   https://opensource.org/licenses/MIT
+
+// @host      localhost:8080
+// @BasePath  /
+
+// @securityDefinitions.basic  BasicAuth
+// @securityDefinitions.apikey  BearerAuth
+// @in                         header
+// @name                       Authorization
+// @description                Bearer token authentication. Format: "Bearer {token}"
 
 func main() {
 	// Initialize logger
@@ -114,43 +135,7 @@ func main() {
 	oidcHandler := handlers.NewOIDCConfigurationHandler(cfg.BaseURL, cfg.JWTIssuer, logger)
 
 	// Setup router
-	router := mux.NewRouter()
-
-	// Add CORS middleware
-	router.Use(func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Access-Control-Allow-Origin", "*")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-
-			if r.Method == "OPTIONS" {
-				w.WriteHeader(http.StatusOK)
-				return
-			}
-
-			next.ServeHTTP(w, r)
-		})
-	})
-
-	// Add logging middleware
-	router.Use(middleware.LoggingMiddleware(logger))
-
-	// Routes
-	// OIDC Discovery
-	router.HandleFunc("/.well-known/openid-configuration", oidcHandler.HandleOIDCConfiguration).Methods("GET", "OPTIONS")
-
-	// OAuth2 endpoints
-	router.HandleFunc("/oauth2/v1.0/token", tokenHandler.HandleToken).Methods("POST", "OPTIONS")
-	router.HandleFunc("/discovery/v1.0/keys", jwksHandler.HandleJWKS).Methods("GET", "OPTIONS")
-
-	// Verfy Token
-	router.HandleFunc("/oauth2/v1.0/verify", verifyHandler.HandleVerify).Methods("POST", "OPTIONS")
-
-	// Health check
-	router.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
-	}).Methods("GET")
+	router := SetupRouter(tokenHandler, verifyHandler, jwksHandler, oidcHandler, logger)
 
 	// Create server
 	srv := &http.Server{
