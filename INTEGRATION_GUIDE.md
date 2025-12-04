@@ -10,8 +10,9 @@ This guide outlines how to integrate the `session-service` (Auth Server) into a 
 
 The authentication flow relies on:
 
-- The **OAuth 2.0 Client Credentials Grant** for the initial token acquisition, where the BFF sends trusted user + tenant context.
-- The **Refresh Token Grant** for renewing expired tokens.
+- The **User Provisioning Grant** (`provision_user`) for initial user login or when updating user details, where the BFF sends user information to create or update user records.
+- The **OAuth 2.0 Client Credentials Grant** (`client_credentials`) for subsequent token acquisition of existing users, where the BFF sends only the user ID.
+- The **Refresh Token Grant** (`refresh_token`) for renewing expired tokens.
 
 > **Important:** All API endpoints (except `/.well-known/openid-configuration`) are **tenant-scoped**, meaning they require `tenant_id` as part of the URL path. For example:
 > - Token endpoint: `POST /{tenant_id}/oauth2/v2.0/token`
@@ -33,32 +34,37 @@ The authentication flow relies on:
 sequenceDiagram
     actor User
     participant Frontend
-    participant Backend1 as Backend Server 1 (BFF)
-    participant AuthServer as Auth Server (session-service)
+    participant Backend1 as Backend Server 1 <br> (BFF)<br>
+    participant AuthServer as Auth Server <br> (session-service)<br>
     participant Backend2 as Backend Server 2
 
     Note over User, Backend1: Initial Authentication Flow
     User->>Frontend: Clicks Icon / Action
     Frontend->>Backend1: Request Action
-    Backend1->>AuthServer: POST /{tenant_id}/oauth2/v2.0/token (client_credentials)
-    Note right of Backend1: tenant_id in path<br/>client_id, client_secret in body
-    AuthServer-->>Backend1: 200 OK (Access Token, Refresh Token)
-    Note right of Backend1: Store Refresh Token Securely<br/>(e.g., Encrypted DB / Session)
-    Backend1-->>Frontend: Response (Access Token ONLY)
+    alt First-Time Login
+        Backend1->>AuthServer: POST /{tenant_id}/oauth2/v2.0/token <br> (provision_user)<br>
+        Note right of Backend1: tenant_id in path<br/>client_id, client_secret, user details in body
+    else Subsequent Login
+        Backend1->>AuthServer: POST /{tenant_id}/oauth2/v2.0/token <br> (client_credentials)<br>
+        Note right of Backend1: tenant_id in path<br/>client_id, client_secret, user_id in body
+    end
+    AuthServer-->>Backend1: 200 OK <br> (Access Token, Refresh Token)<br>
+    Note right of Backend1: Store Refresh Token Securely<br/><br> (e.g., Encrypted DB / Session)<br>
+    Backend1-->>Frontend: Response <br> (Access Token ONLY)<br>
 
     Note over Frontend, Backend2: Protected Resource Access
-    Frontend->>Backend2: Request Resource (Authorization: Bearer <token>)
-    Backend2->>AuthServer: GET /{tenant_id}/discovery/v1.0/keys (Optional)
+    Frontend->>Backend2: Request Resource <br> (Authorization: Bearer <token>)<br>
+    Backend2->>AuthServer: GET /{tenant_id}/discovery/v1.0/keys <br> (Optional)<br>
     Note right of Backend2: Validate token using JWKS<br/>or POST /{tenant_id}/oauth2/v1.0/verify
     Backend2-->>Frontend: Resource Data
 
     Note over Frontend, Backend1: Token Refresh Flow
     Frontend->>Frontend: Check Token Expiry
     alt Token Expired
-        Frontend->>Backend1: Request New Token (Session Cookie / ID)
+        Frontend->>Backend1: Request New Token <br> (Session Cookie / ID)<br>
         Note right of Backend1: Retrieve Stored Refresh Token<br/>& Tenant ID
-        Backend1->>AuthServer: POST /{tenant_id}/oauth2/v2.0/token (refresh_token)
-        AuthServer-->>Backend1: 200 OK (New Access Token, New Refresh Token)
+        Backend1->>AuthServer: POST /{tenant_id}/oauth2/v2.0/token <br> (refresh_token)<br>
+        AuthServer-->>Backend1: 200 OK <br> (New Access Token, New Refresh Token)<br>
         Note right of Backend1: Update Stored Refresh Token
         Backend1-->>Frontend: New Access Token
     end
@@ -72,27 +78,27 @@ When the user triggers the action, **Backend Server 1** must authenticate with t
 
 #### 1a. First-Time User Login (User Provisioning)
 
-For users that don't exist in the Auth Server's database yet, you must provide user details to create the user record.
+For users that don't exist in the Auth Server's database yet, or when you need to update user details, use the `provision_user` grant type. This grant type explicitly signals that user details should be inserted or updated.
 
 *   **Endpoint**: `POST /{tenant_id}/oauth2/v2.0/token`
 *   **Content-Type**: `application/x-www-form-urlencoded`
 *   **Path Parameters**:
     *   `tenant_id` (required): Internal tenant ID in your system (must already exist in the `tenants` table). This is included in the URL path.
-*   **Body Parameters** (Client Credentials Grant - First-Time Login):
-    *   `grant_type`: `client_credentials`
+*   **Body Parameters** (User Provisioning Grant):
+    *   `grant_type`: `provision_user`
     *   `client_id`: Your Client ID
     *   `client_secret`: Your Client Secret
     *   `user_id` (required): Internal user ID in your system (opaque, stable).
-    *   `user_full_name` (required for first-time): Full name of the user (stored in DB, **never** placed in JWT).
-    *   `user_phone` (required for first-time): Phone number of the user (stored in DB, **never** placed in JWT).
+    *   `user_full_name` (required): Full name of the user (stored in DB, **never** placed in JWT).
+    *   `user_phone` (required): Phone number of the user (stored in DB, **never** placed in JWT).
     *   `user_email` (optional): Email of the user (stored in DB, **never** placed in JWT).
     *   `user_roles` (optional): Comma-separated list of roles for this user within the tenant (e.g., `tenant-admin,reader`).
 
-**Example Request (First-Time Login):**
+**Example Request (First-Time Login or User Update):**
 
 ```bash
 curl -X POST http://auth-server:8080/tenant-abc/oauth2/v2.0/token \
-     -d "grant_type=client_credentials" \
+     -d "grant_type=provision_user" \
      -d "client_id=YOUR_CLIENT_ID" \
      -d "client_secret=YOUR_CLIENT_SECRET" \
      -d "user_id=user-123" \
@@ -104,7 +110,7 @@ curl -X POST http://auth-server:8080/tenant-abc/oauth2/v2.0/token \
 
 #### 1b. Subsequent User Login (User Already Exists)
 
-For users that already exist in the Auth Server's database, you only need to provide the `user_id`. The Auth Server will verify the user exists, fetch their roles from the database, and issue tokens.
+For users that already exist in the Auth Server's database, use the `client_credentials` grant type. This will authenticate the user without updating their details.
 
 *   **Endpoint**: `POST /{tenant_id}/oauth2/v2.0/token`
 *   **Content-Type**: `application/x-www-form-urlencoded`
@@ -127,10 +133,12 @@ curl -X POST http://auth-server:8080/tenant-abc/oauth2/v2.0/token \
 ```
 
 > **Note:** 
+> - Use `provision_user` grant type when you need to create or update user details.
+> - Use `client_credentials` grant type for regular authentication of existing users (no user detail updates).
 > - The `tenant_id` is part of the URL path (`/{tenant_id}/oauth2/v2.0/token`), not a form parameter. This makes the API explicitly tenant-scoped.
-> - For first-time login, if `user_full_name` or `user_phone` are missing, the request will be rejected with an `INVALID_REQUEST` error.
-> - For subsequent logins, if the user doesn't exist or belongs to a different tenant, the request will be rejected.
-> - User roles are fetched from the database for subsequent logins, so role changes will be reflected automatically.
+> - For `provision_user`, if `user_full_name` or `user_phone` are missing, the request will be rejected with an `INVALID_REQUEST` error.
+> - For `client_credentials`, if the user doesn't exist, the request will be rejected with an `INVALID_REQUEST` error (use `provision_user` instead).
+> - User roles are fetched from the database for `client_credentials` logins, so role changes will be reflected automatically.
 
 **Example Response (Internal to Backend 1):**
 
@@ -212,21 +220,23 @@ curl -X POST http://auth-server:8080/tenant-abc/oauth2/v2.0/token \
 
 ## Trusted User & Tenant Provisioning
 
-The `client_credentials` flow in this service supports **two modes** of operation:
+This service supports **two distinct grant types** for user authentication and provisioning:
 
-### First-Time User Provisioning
+### User Provisioning (`provision_user` grant type)
 
-When a user doesn't exist in the Auth Server's database:
+Use this grant type when you need to create or update user details:
 
+- **Grant Type**: `provision_user`
 - **Required Fields**: `user_id`, `user_full_name`, `user_phone`
 - **Optional Fields**: `user_email`, `user_roles`
-- **Behavior**: The Auth Server creates a new user record and stores the provided information.
-- **Use Case**: Initial user registration or when syncing a new user from your BFF's user database.
+- **Behavior**: The Auth Server inserts or updates the user record and stores the provided information.
+- **Use Case**: Initial user registration, user detail updates, or when syncing a new user from your BFF's user database.
 
-### Subsequent User Authentication
+### User Authentication (`client_credentials` grant type)
 
-When a user already exists in the Auth Server's database:
+Use this grant type for regular authentication of existing users:
 
+- **Grant Type**: `client_credentials`
 - **Required Fields**: `user_id` only
 - **Behavior**: 
   - The Auth Server verifies the user exists and belongs to the specified tenant.
@@ -293,19 +303,20 @@ Generates access and refresh tokens. This endpoint is **tenant-scoped**, meaning
 
 | Parameter | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
-| `grant_type` | string | Yes | `client_credentials` or `refresh_token` |
-| `client_id` | string | Conditional | Required for `client_credentials` |
-| `client_secret` | string | Conditional | Required for `client_credentials` |
-| `user_id` | string | Conditional | Required for `client_credentials` (user + tenant-scoped tokens only) |
-| `user_full_name` | string | Conditional | Required for `client_credentials` **only if user doesn't exist** (first-time login); stored in DB only |
-| `user_phone` | string | Conditional | Required for `client_credentials` **only if user doesn't exist** (first-time login); stored in DB only |
-| `user_email` | string | Optional | Optional for `client_credentials` (first-time login only); stored in DB only |
-| `user_roles` | string | Optional | Optional for `client_credentials` (first-time login only); comma-separated roles |
+| `grant_type` | string | Yes | `client_credentials`, `provision_user`, or `refresh_token` |
+| `client_id` | string | Conditional | Required for `client_credentials` and `provision_user` |
+| `client_secret` | string | Conditional | Required for `client_credentials` and `provision_user` |
+| `user_id` | string | Conditional | Required for `client_credentials` and `provision_user` (user + tenant-scoped tokens only) |
+| `user_full_name` | string | Conditional | Required for `provision_user`; stored in DB only |
+| `user_phone` | string | Conditional | Required for `provision_user`; stored in DB only |
+| `user_email` | string | Optional | Optional for `provision_user`; stored in DB only |
+| `user_roles` | string | Optional | Optional for `provision_user`; comma-separated roles |
 | `refresh_token` | string | Conditional | Required for `refresh_token` |
 
-> **Note on User Fields:**
-> - For **first-time login** (user doesn't exist): `user_full_name` and `user_phone` are required. `user_email` and `user_roles` are optional.
-> - For **subsequent login** (user exists): Only `user_id` is required. User details and roles are fetched from the database automatically.
+> **Note on Grant Types:**
+> - **`provision_user`**: Use when you need to create or update user details. Requires `user_full_name` and `user_phone`. `user_email` and `user_roles` are optional.
+> - **`client_credentials`**: Use for regular authentication of existing users. Only `user_id` is required. User details and roles are fetched from the database automatically. If the user doesn't exist, use `provision_user` instead.
+> - **`refresh_token`**: Use to refresh expired access tokens. Requires `refresh_token` from a previous authentication.
 
 ### `GET /{tenant_id}/discovery/v1.0/keys`
 

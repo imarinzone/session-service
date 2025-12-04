@@ -153,7 +153,7 @@ const docTemplate = `{
         },
         "/{tenant_id}/oauth2/v2.0/token": {
             "post": {
-                "description": "Issues access and refresh tokens using client_credentials or refresh_token grant types. Supports first-time user provisioning and subsequent authentication.",
+                "description": "Issues access and refresh tokens using client_credentials, provision_user, or refresh_token grant types. Use provision_user for initial login with user details, client_credentials for subsequent authentication of existing users.",
                 "consumes": [
                     "application/x-www-form-urlencoded"
                 ],
@@ -174,50 +174,50 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "Grant type: client_credentials or refresh_token",
+                        "description": "Grant type: client_credentials, provision_user, or refresh_token",
                         "name": "grant_type",
                         "in": "formData",
                         "required": true
                     },
                     {
                         "type": "string",
-                        "description": "Client ID (required for client_credentials)",
+                        "description": "Client ID (required for client_credentials and provision_user)",
                         "name": "client_id",
                         "in": "formData"
                     },
                     {
                         "type": "string",
-                        "description": "Client Secret (required for client_credentials)",
+                        "description": "Client Secret (required for client_credentials and provision_user)",
                         "name": "client_secret",
                         "in": "formData"
                     },
                     {
                         "type": "string",
-                        "description": "User ID (required for client_credentials)",
+                        "description": "User ID (required for client_credentials and provision_user)",
                         "name": "user_id",
                         "in": "formData"
                     },
                     {
                         "type": "string",
-                        "description": "User full name (required for first-time login)",
+                        "description": "User full name (required for provision_user)",
                         "name": "user_full_name",
                         "in": "formData"
                     },
                     {
                         "type": "string",
-                        "description": "User phone (required for first-time login)",
+                        "description": "User phone (required for provision_user)",
                         "name": "user_phone",
                         "in": "formData"
                     },
                     {
                         "type": "string",
-                        "description": "User email (optional, first-time login only)",
+                        "description": "User email (optional, provision_user only)",
                         "name": "user_email",
                         "in": "formData"
                     },
                     {
                         "type": "string",
-                        "description": "Comma-separated user roles (optional, first-time login only)",
+                        "description": "Comma-separated user roles (optional, provision_user only)",
                         "name": "user_roles",
                         "in": "formData"
                     },

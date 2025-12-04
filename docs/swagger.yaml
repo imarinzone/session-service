@@ -170,44 +170,45 @@ paths:
     post:
       consumes:
       - application/x-www-form-urlencoded
-      description: Issues access and refresh tokens using client_credentials or refresh_token
-        grant types. Supports first-time user provisioning and subsequent authentication.
+      description: Issues access and refresh tokens using client_credentials, provision_user,
+        or refresh_token grant types. Use provision_user for initial login with user
+        details, client_credentials for subsequent authentication of existing users.
       parameters:
       - description: Tenant ID
         in: path
         name: tenant_id
         required: true
         type: string
-      - description: 'Grant type: client_credentials or refresh_token'
+      - description: 'Grant type: client_credentials, provision_user, or refresh_token'
         in: formData
         name: grant_type
         required: true
         type: string
-      - description: Client ID (required for client_credentials)
+      - description: Client ID (required for client_credentials and provision_user)
         in: formData
         name: client_id
         type: string
-      - description: Client Secret (required for client_credentials)
+      - description: Client Secret (required for client_credentials and provision_user)
         in: formData
         name: client_secret
         type: string
-      - description: User ID (required for client_credentials)
+      - description: User ID (required for client_credentials and provision_user)
         in: formData
         name: user_id
         type: string
-      - description: User full name (required for first-time login)
+      - description: User full name (required for provision_user)
         in: formData
         name: user_full_name
         type: string
-      - description: User phone (required for first-time login)
+      - description: User phone (required for provision_user)
         in: formData
         name: user_phone
         type: string
-      - description: User email (optional, first-time login only)
+      - description: User email (optional, provision_user only)
         in: formData
         name: user_email
         type: string
-      - description: Comma-separated user roles (optional, first-time login only)
+      - description: Comma-separated user roles (optional, provision_user only)
         in: formData
         name: user_roles
         type: string
