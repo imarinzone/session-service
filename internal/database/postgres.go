@@ -121,10 +121,11 @@ func (r *PostgresRepository) GetUserByID(ctx context.Context, userID string) (*m
 	`
 
 	var user models.User
+	var email sql.NullString
 	err := r.db.QueryRowContext(ctx, query, userID).Scan(
 		&user.ID,
 		&user.TenantID,
-		&user.Email,
+		&email,
 		&user.FullName,
 		&user.PhoneNumber,
 		&user.CreatedAt,
@@ -137,6 +138,13 @@ func (r *PostgresRepository) GetUserByID(ctx context.Context, userID string) (*m
 	if err != nil {
 		r.logger.Error("Failed to get user by ID", zap.String("user_id", userID), zap.Error(err))
 		return nil, err
+	}
+
+	// Convert NULL email to empty string
+	if email.Valid {
+		user.Email = email.String
+	} else {
+		user.Email = ""
 	}
 
 	return &user, nil
@@ -217,11 +225,12 @@ func (r *PostgresRepository) UpsertUserAndRoles(ctx context.Context, user models
 		VALUES ($1, $2, NULLIF($3, ''), $4, $5)
 		ON CONFLICT (id) DO UPDATE
 		SET tenant_id = EXCLUDED.tenant_id,
-		    email = EXCLUDED.email,
+		    email = NULLIF(EXCLUDED.email, ''),
 		    full_name = EXCLUDED.full_name,
 		    phone_number = EXCLUDED.phone_number
 	`
 
+	// NULLIF in SQL converts empty strings to NULL, so empty email will be stored as NULL
 	if _, err = tx.ExecContext(ctx, userQuery,
 		user.ID,
 		user.TenantID,

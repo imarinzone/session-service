@@ -55,52 +55,46 @@ func TestHandleToken_ClientCredentials(t *testing.T) {
 		RateLimit:        100,
 	}
 
-	// User + tenant fields required by the token handler now
+	// User + tenant fields required by the client_credentials flow
 	userID := "user-123"
 	tenantID := "tenant-abc"
-	fullName := "Test User"
-	phone := "+1234567890"
-	email := "user@example.com"
-	rolesCSV := "tenant-admin,reader"
+
+	// Existing user record
+	existingUser := &models.User{
+		ID:       userID,
+		TenantID: tenantID,
+	}
+
+	roles := []string{"tenant-admin", "reader"}
 
 	// Mock expectations
 	mockCache.On("GetClient", mock.Anything, clientID).Return(nil, nil).Once() // Cache miss
 	mockRepo.On("GetClientByID", mock.Anything, clientID).Return(client, nil)
 	mockCache.On("SetClient", mock.Anything, client, 15*time.Minute).Return(nil)
 	mockCache.On("CheckRateLimit", mock.Anything, clientID, 100, time.Minute).Return(false, nil)
+
 	// Tenant must exist
 	mockRepo.On("EnsureTenantExists", mock.Anything, tenantID).Return(nil)
-	// User doesn't exist (first-time login)
-	mockRepo.On("GetUserByID", mock.Anything, userID).Return(nil, nil)
-	// User + roles upsert
-	mockRepo.On("UpsertUserAndRoles", mock.Anything, mock.MatchedBy(func(u models.User) bool {
-		return u.ID == userID &&
-			u.TenantID == tenantID &&
-			u.Email == email &&
-			u.FullName == fullName &&
-			u.PhoneNumber == phone
-	}), mock.MatchedBy(func(r []string) bool {
-		// Order-preserving check for parsed roles
-		return len(r) == 2 && r[0] == "tenant-admin" && r[1] == "reader"
-	})).Return(nil)
+	// User must already exist for client_credentials
+	mockRepo.On("GetUserByID", mock.Anything, userID).Return(existingUser, nil)
+	// Roles fetched from DB
+	mockRepo.On("GetUserRoles", mock.Anything, userID).Return(roles, nil)
+
 	mockCache.On("StoreRefreshToken", mock.Anything, mock.AnythingOfType("string"), mock.AnythingOfType("*models.RefreshTokenData"), cfg.RefreshTokenExpiry).Return(nil)
 	mockRepo.On("UpdateClientUpdatedAt", mock.Anything, clientID).Return(nil)
 
-	// Create request with new Azure-style path format
+	// Create request with tenant in path and required user_id
 	form := url.Values{}
 	form.Add("grant_type", "client_credentials")
 	form.Add("client_id", clientID)
 	form.Add("client_secret", clientSecret)
 	form.Add("user_id", userID)
-	form.Add("user_full_name", fullName)
-	form.Add("user_phone", phone)
-	form.Add("user_email", email)
-	form.Add("user_roles", rolesCSV)
 
 	req := httptest.NewRequest("POST", "/"+tenantID+"/oauth2/v2.0/token", nil)
 	req.PostForm = form
 	// Set mux vars so handler can extract tenant_id from URL path
 	req = mux.SetURLVars(req, map[string]string{"tenant_id": tenantID})
+
 	rr := httptest.NewRecorder()
 
 	// Execute

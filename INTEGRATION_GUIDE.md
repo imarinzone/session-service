@@ -97,7 +97,7 @@ For users that don't exist in the Auth Server's database yet, or when you need t
 **Example Request (First-Time Login or User Update):**
 
 ```bash
-curl -X POST http://auth-server:8080/tenant-abc/oauth2/v2.0/token \
+curl -X POST http://auth-server:9090/tenant-abc/oauth2/v2.0/token \
      -d "grant_type=provision_user" \
      -d "client_id=YOUR_CLIENT_ID" \
      -d "client_secret=YOUR_CLIENT_SECRET" \
@@ -125,7 +125,7 @@ For users that already exist in the Auth Server's database, use the `client_cred
 **Example Request (Subsequent Login):**
 
 ```bash
-curl -X POST http://auth-server:8080/tenant-abc/oauth2/v2.0/token \
+curl -X POST http://auth-server:9090/tenant-abc/oauth2/v2.0/token \
      -d "grant_type=client_credentials" \
      -d "client_id=YOUR_CLIENT_ID" \
      -d "client_secret=YOUR_CLIENT_SECRET" \
@@ -204,7 +204,7 @@ Backend 1 retrieves the stored `refresh_token` and `tenant_id` associated with t
 **Example Request:**
 
 ```bash
-curl -X POST http://auth-server:8080/tenant-abc/oauth2/v2.0/token \
+curl -X POST http://auth-server:9090/tenant-abc/oauth2/v2.0/token \
      -d "grant_type=refresh_token" \
      -d "refresh_token=STORED_REFRESH_TOKEN"
 ```

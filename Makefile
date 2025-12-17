@@ -100,7 +100,7 @@ migrate: ## Run database migrations
 	@echo "$(GREEN)Running database migrations...$(NC)"
 	@if [ -z "$(DATABASE_URL)" ]; then \
 		echo "$(YELLOW)Warning: DATABASE_URL not set. Using default from docker-compose...$(NC)"; \
-		psql postgres://sessionuser:sessionpass@localhost:5432/sessiondb?sslmode=disable -f migrations/001_init.sql; \
+		psql postgres://user:password@localhost:5432/sessiondb -f migrations/001_init.sql; \
 	else \
 		psql $(DATABASE_URL) -f migrations/001_init.sql; \
 	fi

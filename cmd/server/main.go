@@ -31,7 +31,7 @@ import (
 // @license.name  MIT
 // @license.url   https://opensource.org/licenses/MIT
 
-// @host      localhost:8080
+// @host      localhost:9090
 // @BasePath  /
 
 // @securityDefinitions.basic  BasicAuth
@@ -131,7 +131,7 @@ func main() {
 	)
 
 	verifyHandler := handlers.NewVerifyHandler(tokenValidator, logger)
-	jwksHandler := handlers.NewJWKSHandler(keyManager, logger)
+	jwksHandler := handlers.NewJWKSHandler(repo, keyManager, logger)
 	oidcHandler := handlers.NewOIDCConfigurationHandler(cfg.BaseURL, cfg.JWTIssuer, logger)
 
 	// Setup router

@@ -89,7 +89,7 @@ make docker-up
 This will start:
 - PostgreSQL on port 5432
 - Redis on port 6379
-- Session Service on port 8080
+- Session Service on port 9090
 
 #### 4. Run Database Migrations
 
@@ -132,13 +132,13 @@ htpasswd -nbBC 10 "" your-secret | cut -d: -f2
 #### OIDC Discovery
 
 ```bash
-curl http://localhost:8080/.well-known/openid-configuration
+curl http://localhost:9090/.well-known/openid-configuration
 ```
 
 #### Get Access Token (Client Credentials Grant)
 
 ```bash
-curl -X POST http://localhost:8080/tenant-abc/oauth2/v2.0/token \
+curl -X POST http://localhost:9090/tenant-abc/oauth2/v2.0/token \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "grant_type=client_credentials&client_id=my-client&client_secret=your-secret&user_id=user-123"
 ```
@@ -158,7 +158,7 @@ Response:
 #### Refresh Token
 
 ```bash
-curl -X POST http://localhost:8080/tenant-abc/oauth2/v2.0/token \
+curl -X POST http://localhost:9090/tenant-abc/oauth2/v2.0/token \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "grant_type=refresh_token&refresh_token=abc123..."
 ```
@@ -166,7 +166,7 @@ curl -X POST http://localhost:8080/tenant-abc/oauth2/v2.0/token \
 #### Verify Token
 
 ```bash
-curl -X POST http://localhost:8080/tenant-abc/oauth2/v1.0/verify \
+curl -X POST http://localhost:9090/tenant-abc/oauth2/v1.0/verify \
   -H "Content-Type: application/json" \
   -d '{"token": "eyJ..."}'
 ```
@@ -176,7 +176,7 @@ curl -X POST http://localhost:8080/tenant-abc/oauth2/v1.0/verify \
 #### Get JWKS
 
 ```bash
-curl http://localhost:8080/tenant-abc/discovery/v1.0/keys
+curl http://localhost:9090/tenant-abc/discovery/v1.0/keys
 ```
 
 ## API Endpoints
@@ -271,8 +271,8 @@ Environment variables:
 | `JWT_EXPIRY` | Access token expiration | `3600s` |
 | `REFRESH_TOKEN_EXPIRY` | Refresh token expiration | `604800s` (7 days) |
 | `REFRESH_TOKEN_LENGTH` | Refresh token length in bytes | `32` |
-| `SERVER_PORT` | HTTP server port | `8080` |
-| `BASE_URL` | Base URL for OIDC discovery | `http://localhost:8080` |
+| `SERVER_PORT` | HTTP server port | `9090` |
+| `BASE_URL` | Base URL for OIDC discovery | `http://localhost:9090` |
 
 ## AWS API Gateway Integration
 

@@ -55,8 +55,8 @@ func Load() (*Config, error) {
 		JWTExpiry:          getDurationEnv("JWT_EXPIRY", 3600*time.Second),
 		RefreshTokenExpiry: getDurationEnv("REFRESH_TOKEN_EXPIRY", 7*24*3600*time.Second),
 		RefreshTokenLength: getIntEnv("REFRESH_TOKEN_LENGTH", 32),
-		ServerPort:         getEnv("SERVER_PORT", "8080"),
-		BaseURL:            getEnv("BASE_URL", "http://localhost:8080"),
+		ServerPort:         getEnv("SERVER_PORT", "9090"),
+		BaseURL:            getEnv("BASE_URL", "http://localhost:9090"),
 		KeyRotationDays:    getIntEnv("KEY_ROTATION_DAYS", 90),
 		KeyGraceDays:       getIntEnv("KEY_GRACE_DAYS", 14),
 	}

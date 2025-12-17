@@ -24,7 +24,7 @@ WORKDIR /root/
 COPY --from=builder /app/server .
 
 # Expose port
-EXPOSE 8080
+EXPOSE 9090
 
 # Run the server
 CMD ["./server"]
