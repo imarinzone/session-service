@@ -39,13 +39,6 @@ func NewOIDCConfigurationHandler(baseURL, issuer string, logger *zap.Logger) *OI
 }
 
 // HandleOIDCConfiguration handles GET /.well-known/openid-configuration
-// @Summary     Get OpenID Connect configuration
-// @Description Returns the OpenID Connect discovery document with endpoints and supported features
-// @Tags        oidc
-// @Produce     application/json
-// @Success     200  {object}  OIDCConfiguration
-// @Failure     500  {object}  map[string]string
-// @Router      /.well-known/openid-configuration [get]
 func (h *OIDCConfigurationHandler) HandleOIDCConfiguration(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -53,9 +46,9 @@ func (h *OIDCConfigurationHandler) HandleOIDCConfiguration(w http.ResponseWriter
 	}
 
 	config := OIDCConfiguration{
-		TokenEndpoint:                     h.baseURL + "/{tenant_id}/oauth2/v2.0/token",
+		TokenEndpoint:                     h.baseURL + "/oauth2/v1.0/token",
 		TokenEndpointAuthMethodsSupported: []string{"client_secret_post", "client_secret_basic"},
-		JwksURI:                           h.baseURL + "/{tenant_id}/discovery/v1.0/keys",
+		JwksURI:                           h.baseURL + "/discovery/v1.0/keys",
 		ResponseModesSupported:            []string{"query", "fragment", "form_post"},
 		SubjectTypesSupported:             []string{"public"},
 		IDTokenSigningAlgValuesSupported:  []string{"RS256"},

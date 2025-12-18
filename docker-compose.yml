@@ -41,7 +41,7 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgres://user:password@postgres:5432/sessiondb?sslmode=disable}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
-
+      BASE_URL: ${BASE_URL:-http://localhost:9090}
       # JWT keys (should come from .env in most setups)
       JWT_PRIVATE_KEY: ${JWT_PRIVATE_KEY}
       JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY}

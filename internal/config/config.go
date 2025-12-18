@@ -47,7 +47,7 @@ func Load() (*Config, error) {
 
 	cfg := &Config{
 		DatabaseURL:        getEnv("DATABASE_URL", "postgres://user:password@localhost:5435/sessiondb?sslmode=disable"),
-		RedisURL:           getEnv("REDIS_URL", "redis://localhost:6383/0"),
+		RedisURL:           getEnv("REDIS_URL", "redis://localhost:6379/0"),
 		JWTPrivateKey:      jwtPrivateKey,
 		JWTPublicKey:       jwtPublicKey,
 		JWTIssuer:          getEnv("JWT_ISSUER", "session-service"),

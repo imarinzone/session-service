@@ -31,6 +31,7 @@ import (
 // @license.name  MIT
 // @license.url   https://opensource.org/licenses/MIT
 
+// @host      localhost:9090
 // @BasePath  /
 
 // @securityDefinitions.basic  BasicAuth
@@ -54,20 +55,6 @@ func main() {
 	if err != nil {
 		logger.Fatal("Failed to load configuration", zap.Error(err))
 	}
-
-	// Log effective configuration for connectivity debugging (no secrets)
-	logger.Info("Loaded configuration",
-		zap.String("database_url", cfg.DatabaseURL),
-		zap.String("redis_url", cfg.RedisURL),
-		zap.String("server_port", cfg.ServerPort),
-		zap.String("base_url", cfg.BaseURL),
-	)
-
-	// Also log raw environment for DB/cache in case defaults are being used
-	logger.Info("Environment overrides",
-		zap.String("env_DATABASE_URL", os.Getenv("DATABASE_URL")),
-		zap.String("env_REDIS_URL", os.Getenv("REDIS_URL")),
-	)
 
 	// Initialize database
 	ctx := context.Background()
