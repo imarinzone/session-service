@@ -36,6 +36,9 @@ type PostgresRepository struct {
 
 // NewRepository creates a new repository instance
 func NewRepository(ctx context.Context, databaseURL string, logger *zap.Logger) (Repository, error) {
+	// Log which database URL we're going to use
+	logger.Info("Initializing Postgres repository", zap.String("database_url", databaseURL))
+
 	// Retry connection with exponential backoff
 	var db *sql.DB
 	var err error
@@ -271,4 +274,3 @@ func (r *PostgresRepository) UpsertUserAndRoles(ctx context.Context, user models
 
 	return nil
 }
-

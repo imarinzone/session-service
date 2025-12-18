@@ -87,8 +87,8 @@ make docker-up
 ```
 
 This will start:
-- PostgreSQL on port 5432
-- Redis on port 6379
+- PostgreSQL on port 5435
+- Redis on port 6383
 - Session Service on port 9090
 
 #### 4. Run Database Migrations

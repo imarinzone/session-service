@@ -100,7 +100,7 @@ migrate: ## Run database migrations
 	@echo "$(GREEN)Running database migrations...$(NC)"
 	@if [ -z "$(DATABASE_URL)" ]; then \
 		echo "$(YELLOW)Warning: DATABASE_URL not set. Using default from docker-compose...$(NC)"; \
-		psql postgres://user:password@localhost:5432/sessiondb -f migrations/001_init.sql; \
+		psql postgres://user:password@localhost:5435/sessiondb -f migrations/001_init.sql; \
 	else \
 		psql $(DATABASE_URL) -f migrations/001_init.sql; \
 	fi
@@ -133,7 +133,7 @@ create-client: ## Create a test client (requires DATABASE_URL or docker-compose)
 	echo ""; \
 	HASH=$$(go run -c 'golang.org/x/crypto/bcrypt' <<< "$$CLIENT_SECRET" 2>/dev/null || echo "$$(htpasswd -nbBC 10 "" $$CLIENT_SECRET | cut -d: -f2)"); \
 	if [ -z "$(DATABASE_URL)" ]; then \
-		DB_URL="postgres://user:password@localhost:5432/sessiondb?sslmode=disable"; \
+		DB_URL="postgres://user:password@localhost:5435/sessiondb?sslmode=disable"; \
 	else \
 		DB_URL="$(DATABASE_URL)"; \
 	fi; \
@@ -150,7 +150,7 @@ create-tenant: ## Create or update a tenant record
 		exit 1; \
 	fi; \
 	if [ -z "$(DATABASE_URL)" ]; then \
-		DB_URL="postgres://user:password@localhost:5432/sessiondb?sslmode=disable"; \
+		DB_URL="postgres://user:password@localhost:5435/sessiondb?sslmode=disable"; \
 	else \
 		DB_URL="$(DATABASE_URL)"; \
 	fi; \
@@ -169,7 +169,7 @@ create-user: ## Create or update a user record
 		exit 1; \
 	fi; \
 	if [ -z "$(DATABASE_URL)" ]; then \
-		DB_URL="postgres://user:password@localhost:5432/sessiondb?sslmode=disable"; \
+		DB_URL="postgres://user:password@localhost:5435/sessiondb?sslmode=disable"; \
 	else \
 		DB_URL="$(DATABASE_URL)"; \
 	fi; \

@@ -7,7 +7,7 @@ services:
       POSTGRES_PASSWORD: password
       POSTGRES_DB: sessiondb
     ports:
-      - "5432:5432"
+      - "5435:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./migrations:/docker-entrypoint-initdb.d
@@ -21,7 +21,7 @@ services:
     image: redis:7-alpine
     container_name: session-redis
     ports:
-      - "6379:6379"
+      - "6383:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -31,17 +31,22 @@ services:
       retries: 5
 
   session-service:
+    # image: imarinzone/bap-auth-service:latest
     build: .
-    container_name: session-service
+    container_name: bap-auth-service
     ports:
       - "9090:9090"
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgres://user:password@postgres:5432/sessiondb?sslmode=disable
-      REDIS_URL: redis://redis:6379/0
+      DATABASE_URL: ${DATABASE_URL:-postgres://user:password@postgres:5432/sessiondb?sslmode=disable}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+
+      # JWT keys (should come from .env in most setups)
       JWT_PRIVATE_KEY: ${JWT_PRIVATE_KEY}
       JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY}
+
+      # App-specific settings
       JWT_ISSUER: ${JWT_ISSUER:-session-service}
       JWT_AUDIENCE: ${JWT_AUDIENCE:-api}
       JWT_EXPIRY: ${JWT_EXPIRY:-3600s}
@@ -58,4 +63,3 @@ services:
 volumes:
   postgres_data:
   redis_data:
-

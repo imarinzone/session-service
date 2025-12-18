@@ -52,15 +52,15 @@ func TestLoad(t *testing.T) {
 			env: map[string]string{
 				"JWT_PRIVATE_KEY": privKey,
 				"JWT_PUBLIC_KEY":  pubKey,
-				"DATABASE_URL":    "postgres://user:pass@localhost:5432/db",
-				"REDIS_URL":       "redis://localhost:6379/0",
+				"DATABASE_URL":    "postgres://user:pass@localhost:5435/db",
+				"REDIS_URL":       "redis://localhost:6383/0",
 			},
 			wantErr: false,
 		},
 		{
 			name: "missing keys",
 			env: map[string]string{
-				"DATABASE_URL": "postgres://user:pass@localhost:5432/db",
+				"DATABASE_URL": "postgres://user:pass@localhost:5435/db",
 			},
 			wantErr: true,
 		},
